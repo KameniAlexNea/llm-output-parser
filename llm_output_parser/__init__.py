@@ -78,7 +78,7 @@ def json_structure_depth(obj):
         return 0
 
 
-def extract_json_objects(text: str, open_delimiter: str, close_delimiter: str, results: list[str]):
+def extract_json_objects(text: str, open_delimiter: str, close_delimiter: str, results: list):
     """
     Extracts all valid JSON objects or arrays from the text with properly balanced delimiters.
     
@@ -126,15 +126,73 @@ def extract_json_objects(text: str, open_delimiter: str, close_delimiter: str, r
             # Extract the object string including delimiters
             json_str = text[start:pos]
             
-            # Attempt to parse it
-            try:
-                parsed = json.loads(json_str)
-                
-                # Check if this is a valid JSON object/array and not just a string literal
-                if isinstance(parsed, (dict, list)):
-                    results.append((parsed, json_str))
-            except json.JSONDecodeError:
-                pass
+            # Try multiple parsing approaches
+            try_parse_with_approaches(json_str, results)
                 
         # Move to position after the current match to look for more
         i = pos if balance == 0 else start + 1
+
+def try_parse_with_approaches(json_str: str, results: list):
+    """
+    Attempts to parse a JSON string using multiple approaches.
+    
+    :param json_str: The JSON string to parse
+    :param results: List to append results to
+    """
+    # Approach 1: Direct parsing
+    try:
+        parsed = json.loads(json_str)
+        if isinstance(parsed, (dict, list)):
+            results.append((parsed, json_str))
+        return  # Successfully parsed, no need to try other approaches
+    except json.JSONDecodeError:
+        pass
+    
+    # Approach 2: Clean up common formatting issues
+    try:
+        # Remove JavaScript-style comments
+        uncleaned = json_str
+        cleaned = re.sub(r'//.*?$|/\*.*?\*/', '', uncleaned, flags=re.MULTILINE | re.DOTALL)
+        # Remove trailing commas in objects and arrays
+        cleaned = re.sub(r',\s*([\]}])', r'\1', cleaned)
+        
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, (dict, list)):
+            results.append((parsed, cleaned))
+        return  # Successfully parsed after cleaning
+    except json.JSONDecodeError:
+        pass
+    
+    # Approach 3: Manual handling of control characters
+    try:
+        # Replace literal control characters with their proper JSON escape sequences
+        control_char_map = {
+            '\b': '\\b',  # backspace
+            '\f': '\\f',  # form feed
+            '\n': '\\n',  # line feed
+            '\r': '\\r',  # carriage return
+            '\t': '\\t',   # tab
+        }
+        
+        # First, unescape any already escaped sequences to avoid double escaping
+        unescaped = json_str
+        for char, escape in control_char_map.items():
+            # Replace the escaped version with a placeholder
+            placeholder = f"__PLACEHOLDER_{ord(char)}__"
+            unescaped = unescaped.replace(escape, placeholder)
+        
+        # Then replace actual control characters with proper escapes
+        for char, escape in control_char_map.items():
+            unescaped = unescaped.replace(char, escape)
+        
+        # Restore placeholders to their proper escaped form
+        for char, escape in control_char_map.items():
+            placeholder = f"__PLACEHOLDER_{ord(char)}__"
+            unescaped = unescaped.replace(placeholder, escape)
+            
+        parsed = json.loads(unescaped)
+        if isinstance(parsed, (dict, list)):
+            results.append((parsed, unescaped))
+    except (json.JSONDecodeError, Exception):
+        # If all approaches fail, don't add anything to results
+        pass

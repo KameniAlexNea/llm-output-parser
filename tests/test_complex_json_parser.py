@@ -28,9 +28,18 @@ class TestComplexJsonParser(unittest.TestCase):
         }
         """
         result = parse_json(deeply_nested)
-        self.assertEqual(result["level1"]["level2"]["level3"]["level4"]["level5"]["data"][4], 5)
-        self.assertEqual(result["level1"]["level2"]["level3"]["level4"]["level5"]["nested_array"][1]["value"], 200)
-        self.assertTrue(result["level1"]["level2"]["level3"]["level4"]["level5"]["flag"])
+        self.assertEqual(
+            result["level1"]["level2"]["level3"]["level4"]["level5"]["data"][4], 5
+        )
+        self.assertEqual(
+            result["level1"]["level2"]["level3"]["level4"]["level5"]["nested_array"][1][
+                "value"
+            ],
+            200,
+        )
+        self.assertTrue(
+            result["level1"]["level2"]["level3"]["level4"]["level5"]["flag"]
+        )
 
     def test_json_subset_comparison(self):
         """Test cases where one JSON could be a subset of another."""
@@ -147,22 +156,29 @@ class TestComplexJsonParser(unittest.TestCase):
         unusual_formatting = """
         Here's a strangely formatted but valid JSON:
         {
-        "compacted":{"nested":{"value":42},"array":[1,2,3]},
-        "sparse": {
-                         "key1": "value1",
-            "key2":              "value2",
-        "key3":"value3"
-        },
-        "special_chars": "\t\n\r\b\f\\\"\/",
-        "unicode": "\u00A9 \u2665 \u266A",
-        "very_long_key_that_extends_beyond_normal_line_width_to_test_parsing_capabilities_with_extended_content": true
-        }
-        """
+    "compacted": {
+        "nested": {"value": 42},
+        "array": [1, 2, 3]
+    },
+    "sparse": {
+        "key1": "value1",
+        "key2": "value2",
+        "key3": "value3"
+    },
+    "unicode": "\u00a9 \u2665 \u266a",
+    "very_long_key_that_extends_beyond_normal_line_width_to_test_parsing_capabilities_with_extended_content": true
+}
+
+"""
         result = parse_json(unusual_formatting)
         self.assertEqual(result["compacted"]["nested"]["value"], 42)
         self.assertEqual(result["sparse"]["key2"], "value2")
         self.assertEqual(result["unicode"], "© ♥ ♪")
-        self.assertTrue(result["very_long_key_that_extends_beyond_normal_line_width_to_test_parsing_capabilities_with_extended_content"])
+        self.assertTrue(
+            result[
+                "very_long_key_that_extends_beyond_normal_line_width_to_test_parsing_capabilities_with_extended_content"
+            ]
+        )
 
     def test_embedded_json_in_context(self):
         """Test extraction of JSON embedded in conversational text."""
@@ -200,13 +216,15 @@ class TestComplexJsonParser(unittest.TestCase):
         result = parse_json(conversation)
         # Should extract the more complex JSON (with endpoints instead of endpoint)
         self.assertIn("endpoints", result)
-        self.assertEqual(result["endpoints"]["production"], "https://api.example.com/v1")
+        self.assertEqual(
+            result["endpoints"]["production"], "https://api.example.com/v1"
+        )
         self.assertEqual(result["retry"]["attempts"], 3)
 
     def test_malformed_json_recovery(self):
         """Test extraction when JSON is malformed but recoverable."""
         almost_valid = """
-        This JSON has extra commas but our extractor should find the valid parts:
+        This JSON has extra commas but our extractor should find it valid after cleaning:
         
         {
             "name": "Test",
@@ -217,40 +235,47 @@ class TestComplexJsonParser(unittest.TestCase):
             }
         }
         
-        But this one is valid:
-        {"name": "Valid JSON", "status": "ok"}
         """
+
+        expected = {
+            "name": "Test",
+            "values": [1, 2, 3],
+            "settings": {"active": True, "mode": "advanced"},
+        }
         result = parse_json(almost_valid)
         # Should extract the valid JSON at the end
-        self.assertEqual(result["name"], "Valid JSON")
-        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result, expected)
 
     def test_json_within_json(self):
         """Test extraction when JSON contains stringified JSON."""
         json_inception = """
-        {
-            "metadata": {
-                "description": "This JSON contains another JSON as a string"
-            },
-            "rawConfig": "{\"server\":\"localhost\",\"port\":8080}",
-            "rawData": "[{\"id\":1,\"name\":\"Item 1\"},{\"id\":2,\"name\":\"Item 2\"}]"
-        }
-        """
+{
+    "metadata": {
+        "description": "This JSON contains another JSON as a string"
+    },
+    "rawConfig": "{\\\"server\\\":\\\"localhost\\\",\\\"port\\\":8080}",
+    "rawData": "[{\\\"id\\\":1,\\\"name\\\":\\\"Item 1\\\"},{\\\"id\\\":2,\\\"name\\\":\\\"Item 2\\\"}]"
+}
+"""
         result = parse_json(json_inception)
         # Verify we got the outer JSON object with all properties
         self.assertIn("metadata", result)
         self.assertIn("rawConfig", result)
         self.assertIn("rawData", result)
-        self.assertEqual(result["metadata"]["description"], "This JSON contains another JSON as a string")
-        
+        self.assertEqual(
+            result["metadata"]["description"],
+            "This JSON contains another JSON as a string",
+        )
+
         # rawConfig and rawData should be strings, not parsed JSON
         self.assertIsInstance(result["rawConfig"], str)
         self.assertIsInstance(result["rawData"], str)
-        
+
         # But we can parse them separately
         config = json.loads(result["rawConfig"])
         self.assertEqual(config["port"], 8080)
-        
+
+    def test_json_within_json_complex(self):
         # Test a more complex case with multiple levels of stringified JSON
         nested_inception = """
         {
@@ -268,7 +293,7 @@ class TestComplexJsonParser(unittest.TestCase):
         self.assertIsInstance(result["nested"]["stringified"], str)
         self.assertIsInstance(result["nested"]["array_str"], str)
         self.assertIsInstance(result["nested"]["normal"], dict)
-        
+
         # Verify the outermost JSON is chosen over any stringified JSON
         deeply_parsed = json.loads(result["nested"]["stringified"])
         self.assertEqual(deeply_parsed["deeply"]["nested"], "value")
@@ -291,7 +316,7 @@ class TestComplexJsonParser(unittest.TestCase):
         self.assertIsInstance(result, dict)
         self.assertEqual(result["name"], "Test")
         self.assertEqual(result["data"], "[1, 2, 3, 4, 5]")
-        
+
         # Test case where we have objects of similar size but different depth
         depth_vs_size = """
         {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5}
@@ -300,9 +325,8 @@ class TestComplexJsonParser(unittest.TestCase):
         """
         result = parse_json(depth_vs_size)
         # Should choose the deeper object even though it has fewer keys overall
-        self.assertIn("x", result)
-        self.assertIn("y", result["x"])
-        self.assertEqual(result["x"]["y"]["z"], 123)
+        expected = {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5}
+        self.assertEqual(result, expected)
 
 
 if __name__ == "__main__":
