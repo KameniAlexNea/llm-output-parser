@@ -207,7 +207,7 @@ class TestNestedStructures(unittest.TestCase):
         self.assertEqual(laptop["id"], "PRD-123456")
         self.assertEqual(laptop["categories"][0][2], "Laptops")
         self.assertEqual(laptop["specs"]["dimensions"]["height"], 0.8)
-        self.assertEqual(laptop["specs"]["performance"][1]["scores"]["multi"], 2340)
+        self.assertEqual(laptop["specs"]["performance"][1]["scores"][0]["multi"], 2340)
         self.assertEqual(laptop["market_data"]["us"]["availability"][0]["quantity"], 23)
         self.assertEqual(laptop["market_data"]["eu"]["currency"], "EUR")
 

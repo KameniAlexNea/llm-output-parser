@@ -160,11 +160,20 @@ def _try_parse_with_approaches(
 
     # Approach 2: Clean up common formatting issues
     try:
-        # Remove JavaScript-style comments
+        # Remove JavaScript-style comments (improved for multi-line handling)
         uncleaned = json_str
+        
+        # First, handle multi-line comments (/* ... */)
+        # This pattern uses a non-greedy match to properly handle nested structures
         cleaned = re.sub(
-            r"//.*?$|/\*.*?\*/", "", uncleaned, flags=re.MULTILINE | re.DOTALL
+            r"/\*[\s\S]*?\*/", "", uncleaned, flags=re.DOTALL
         )
+        
+        # Then handle single-line comments
+        cleaned = re.sub(
+            r"//.*?(?:\n|$)", "", cleaned, flags=re.MULTILINE
+        )
+        
         # Remove trailing commas in objects and arrays
         cleaned = re.sub(r",\s*([\]}])", r"\1", cleaned)
 
@@ -175,7 +184,23 @@ def _try_parse_with_approaches(
     except json.JSONDecodeError:
         pass
 
-    # Approach 3: Manual handling of control characters
+    # Approach 3: More aggressive cleaning if the above failed
+    try:
+        # Try a more comprehensive cleaning approach
+        # First remove all comments completely
+        aggressive_cleaned = _remove_comments_comprehensive(json_str)
+        
+        # Then fix trailing commas
+        aggressive_cleaned = re.sub(r",\s*([\]}])", r"\1", aggressive_cleaned)
+        
+        parsed = json.loads(aggressive_cleaned)
+        if isinstance(parsed, (dict, list)):
+            results.append((parsed, start_pos, end_pos))
+        return  # Successfully parsed after aggressive cleaning
+    except json.JSONDecodeError:
+        pass
+
+    # Approach 4: Manual handling of control characters
     try:
         # Replace literal control characters with their proper JSON escape sequences
         control_char_map = {
@@ -201,6 +226,10 @@ def _try_parse_with_approaches(
         for char, escape in control_char_map.items():
             placeholder = f"__PLACEHOLDER_{ord(char)}__"
             unescaped = unescaped.replace(placeholder, escape)
+            
+        # Apply all cleanings together as a last resort
+        unescaped = _remove_comments_comprehensive(unescaped)
+        unescaped = re.sub(r",\s*([\]}])", r"\1", unescaped)
 
         parsed = json.loads(unescaped)
         if isinstance(parsed, (dict, list)):
@@ -208,6 +237,69 @@ def _try_parse_with_approaches(
     except (json.JSONDecodeError, Exception):
         # If all approaches fail, don't add anything to results
         pass
+
+
+def _remove_comments_comprehensive(text):
+    """
+    Comprehensively removes both single-line and multi-line JavaScript style comments.
+    Handles complex cases like nested comments and comments inside strings.
+    
+    :param text: The JSON text to clean
+    :return: Text with all comments removed
+    """
+    # Process the string character by character to properly handle comments vs strings
+    result = []
+    i = 0
+    in_string = False
+    in_single_comment = False
+    in_multi_comment = False
+    escape_next = False
+    
+    while i < len(text):
+        char = text[i]
+        next_char = text[i+1] if i+1 < len(text) else ''
+        
+        # Handle string literals
+        if char == '"' and not escape_next and not in_single_comment and not in_multi_comment:
+            in_string = not in_string
+            result.append(char)
+        
+        # Handle escape character within strings
+        elif char == '\\' and in_string and not escape_next:
+            escape_next = True
+            result.append(char)
+        
+        # Handle start of single-line comment
+        elif char == '/' and next_char == '/' and not in_string and not in_single_comment and not in_multi_comment:
+            in_single_comment = True
+            i += 1  # Skip the next '/' character
+        
+        # Handle end of single-line comment
+        elif char == '\n' and in_single_comment:
+            in_single_comment = False
+            result.append(char)  # Keep the newline
+        
+        # Handle start of multi-line comment
+        elif char == '/' and next_char == '*' and not in_string and not in_single_comment and not in_multi_comment:
+            in_multi_comment = True
+            i += 1  # Skip the next '*' character
+        
+        # Handle end of multi-line comment
+        elif char == '*' and next_char == '/' and in_multi_comment:
+            in_multi_comment = False
+            i += 1  # Skip the next '/' character
+        
+        # Add character to result if not in a comment
+        elif not in_single_comment and not in_multi_comment:
+            result.append(char)
+        
+        # Reset escape flag
+        if escape_next:
+            escape_next = False
+        
+        i += 1
+    
+    return ''.join(result)
 
 
 def _remove_overlapping_jsons(jsons_with_spans):
