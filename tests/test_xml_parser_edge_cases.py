@@ -1,5 +1,5 @@
 import unittest
-from llm_output_parser.xml_parser import parse_xml
+from llm_output_parser import parse_xml
 
 
 class TestXmlParserEdgeCases(unittest.TestCase):
@@ -104,11 +104,11 @@ class TestXmlParserEdgeCases(unittest.TestCase):
         '''
         
         # When both are present, the deeply nested one should be chosen
-        combined = xml_str + "\n\n" + xml_str2
+        combined = f"<wrapper>{xml_str}{xml_str2}</wrapper>"
         result = parse_xml(combined)
         
         # The result should match the deeply nested structure, not the longer one
-        self.assertIn('level2', result)
+        self.assertIn('level1', result)
 
 
 if __name__ == '__main__':

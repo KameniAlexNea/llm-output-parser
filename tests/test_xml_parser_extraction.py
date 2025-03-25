@@ -1,5 +1,5 @@
 import unittest
-from llm_output_parser.xml_parser import parse_xml
+from llm_output_parser import parse_xml
 
 
 class TestXmlParserExtraction(unittest.TestCase):

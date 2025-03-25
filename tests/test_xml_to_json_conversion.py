@@ -1,6 +1,6 @@
 import unittest
 import xml.etree.ElementTree as ET
-from llm_output_parser.xml_parser import _xml_to_json
+from llm_output_parser import _xml_to_json
 
 
 class TestXmlToJsonConversion(unittest.TestCase):
