@@ -1,6 +1,7 @@
 import json
 import re
 
+
 def parse_jsons(json_str: str):
     """
     Parses all JSON objects from a string that may contain extra text.
@@ -53,10 +54,10 @@ def parse_jsons(json_str: str):
 
     if not parsed_jsons_with_spans:
         raise ValueError("Failed to parse any JSON from the input string.")
-    
+
     # Remove overlapping JSON objects (keep non-overlapping ones)
     non_overlapping = _remove_overlapping_jsons(parsed_jsons_with_spans)
-    
+
     # Return just the parsed JSON objects without the spans
     return [item[0] for item in non_overlapping]
 
@@ -137,7 +138,9 @@ def _extract_json_objects(
         i = pos if balance == 0 else start + 1
 
 
-def _try_parse_with_approaches(json_str: str, start_pos: int, end_pos: int, results: list):
+def _try_parse_with_approaches(
+    json_str: str, start_pos: int, end_pos: int, results: list
+):
     """
     Attempts to parse a JSON string using multiple approaches.
 
@@ -210,25 +213,25 @@ def _try_parse_with_approaches(json_str: str, start_pos: int, end_pos: int, resu
 def _remove_overlapping_jsons(jsons_with_spans):
     """
     Removes overlapping JSON objects from the results.
-    
+
     When JSONs overlap, we keep the one that appears first in the original text.
-    
+
     :param jsons_with_spans: List of tuples (parsed_json, start_pos, end_pos)
     :return: List of non-overlapping JSON objects with their spans
     """
     if not jsons_with_spans:
         return []
-    
+
     # Sort by start position to process in order of appearance
     sorted_jsons = sorted(jsons_with_spans, key=lambda x: x[1])
-    
+
     non_overlapping = [sorted_jsons[0]]
     last_end = sorted_jsons[0][2]
-    
+
     for json_item, start, end in sorted_jsons[1:]:
         # If this item starts after the last one ends (no overlap)
         if start >= last_end:
             non_overlapping.append((json_item, start, end))
             last_end = end
-    
+
     return non_overlapping

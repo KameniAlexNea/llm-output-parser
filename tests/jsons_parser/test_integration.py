@@ -1,12 +1,13 @@
-import unittest
 import json
-import os
+import unittest
+
 from llm_output_parser.jsons_parser import parse_jsons
+
 
 class TestIntegration(unittest.TestCase):
     def test_llm_response_with_explanation_and_json(self):
         """Test parsing LLM response with explanation and a JSON object"""
-        llm_response = '''
+        llm_response = """
         Based on your requirements, here's a recipe for chocolate chip cookies:
 
         ```json
@@ -38,8 +39,8 @@ class TestIntegration(unittest.TestCase):
         ```
 
         Let me know if you'd like any modifications to this recipe!
-        '''
-        
+        """
+
         result = parse_jsons(llm_response)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["recipe"]["name"], "Chocolate Chip Cookies")
@@ -48,7 +49,7 @@ class TestIntegration(unittest.TestCase):
 
     def test_llm_response_with_multiple_code_formats(self):
         """Test parsing LLM response with JSON in different formats"""
-        llm_response = '''
+        llm_response = """
         Here are three different data formats:
 
         1. A person object:
@@ -67,8 +68,8 @@ class TestIntegration(unittest.TestCase):
           "logLevel": "info",
           "timeout": 30
         }
-        '''
-        
+        """
+
         result = parse_jsons(llm_response)
         self.assertEqual(len(result), 3)
         self.assertIn({"name": "John", "age": 30}, result)
@@ -77,28 +78,28 @@ class TestIntegration(unittest.TestCase):
 
     def test_overlapping_json_extraction(self):
         """Test that overlapping JSON objects are handled correctly"""
-        llm_response = '''
+        llm_response = """
         Here's a configuration: {"config": {"inner": {"settings": [1, 2, 3]}}}
         
         The inner part: {"settings": [1, 2, 3]}
-        '''
-        
+        """
+
         result = parse_jsons(llm_response)
         # Should extract both objects but remove any that completely overlap
         self.assertGreaterEqual(len(result), 1)
-        
+
         # The complete config should be present
         complete_config_present = False
         for r in result:
             if isinstance(r, dict) and "config" in r:
                 complete_config_present = True
                 break
-        
+
         self.assertTrue(complete_config_present)
 
     def test_realistic_chatgpt_api_response(self):
         """Test parsing a realistic ChatGPT API response with embedded JSON"""
-        llm_response = '''
+        llm_response = """
         I've analyzed your financial data and prepared a comprehensive report:
 
         ```json
@@ -220,62 +221,87 @@ class TestIntegration(unittest.TestCase):
         Based on this analysis, I'd be happy to discuss specific strategies for addressing the recommendations or answer any questions about your financial position.
 
         Would you like me to prepare a monthly budget that aligns with these findings?
-        '''
-        
+        """
+
         result = parse_jsons(llm_response)
         self.assertEqual(len(result), 1)
-        
+
         financial_data = result[0]
-        
+
         # Check deep nested values
-        self.assertEqual(financial_data["financial_summary"]["income"]["total"], 285000.00)
-        self.assertEqual(financial_data["financial_summary"]["expenses"]["breakdown"]["housing"], 72000.00)
+        self.assertEqual(
+            financial_data["financial_summary"]["income"]["total"], 285000.00
+        )
+        self.assertEqual(
+            financial_data["financial_summary"]["expenses"]["breakdown"]["housing"],
+            72000.00,
+        )
         self.assertEqual(len(financial_data["analysis"]["strengths"]), 3)
-        self.assertEqual(financial_data["analysis"]["recommendations"][0]["priority"], "high")
-        self.assertEqual(financial_data["retirement_projection"]["scenarios"][1]["name"], "Increased savings (additional 5%)")
-        self.assertEqual(financial_data["retirement_projection"]["scenarios"][1]["monthly_retirement_income"], 19733.33)
+        self.assertEqual(
+            financial_data["analysis"]["recommendations"][0]["priority"], "high"
+        )
+        self.assertEqual(
+            financial_data["retirement_projection"]["scenarios"][1]["name"],
+            "Increased savings (additional 5%)",
+        )
+        self.assertEqual(
+            financial_data["retirement_projection"]["scenarios"][1][
+                "monthly_retirement_income"
+            ],
+            19733.33,
+        )
 
     def test_json_with_large_array_of_complex_objects(self):
         """Test parsing a JSON with a large array of complex objects"""
         # Generate a large test JSON
         test_items = []
         for i in range(100):  # 100 complex objects
-            test_items.append({
-                "id": f"ITEM-{i:04d}",
-                "timestamp": f"2023-08-{(i % 31) + 1:02d}T{(i % 24):02d}:{(i % 60):02d}:00Z",
-                "metrics": {
-                    "value1": i * 1.5,
-                    "value2": i * i * 0.01,
-                    "ratio": 0.5 + (i % 10) * 0.05
-                },
-                "tags": [f"tag{j}" for j in range(1, (i % 5) + 3)],
-                "status": ["pending", "active", "completed", "failed"][i % 4],
-                "nested": {
-                    "level1": {
-                        "level2": {
-                            "level3": {
-                                "data": [i, i+1, i+2],
-                                "flag": i % 2 == 0
+            test_items.append(
+                {
+                    "id": f"ITEM-{i:04d}",
+                    "timestamp": f"2023-08-{(i % 31) + 1:02d}T{(i % 24):02d}:{(i % 60):02d}:00Z",
+                    "metrics": {
+                        "value1": i * 1.5,
+                        "value2": i * i * 0.01,
+                        "ratio": 0.5 + (i % 10) * 0.05,
+                    },
+                    "tags": [f"tag{j}" for j in range(1, (i % 5) + 3)],
+                    "status": ["pending", "active", "completed", "failed"][i % 4],
+                    "nested": {
+                        "level1": {
+                            "level2": {
+                                "level3": {
+                                    "data": [i, i + 1, i + 2],
+                                    "flag": i % 2 == 0,
+                                }
                             }
                         }
-                    }
+                    },
                 }
-            })
-        
-        large_json = {"items": test_items, "count": len(test_items), "page": 1, "total_pages": 1}
+            )
+
+        large_json = {
+            "items": test_items,
+            "count": len(test_items),
+            "page": 1,
+            "total_pages": 1,
+        }
         json_str = json.dumps(large_json)
-        
+
         result = parse_jsons(json_str)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["count"], 100)
         self.assertEqual(len(result[0]["items"]), 100)
         self.assertEqual(result[0]["items"][42]["id"], "ITEM-0042")
         self.assertAlmostEqual(result[0]["items"][42]["metrics"]["value1"], 42 * 1.5)
-        self.assertEqual(result[0]["items"][99]["nested"]["level1"]["level2"]["level3"]["data"], [99, 100, 101])
+        self.assertEqual(
+            result[0]["items"][99]["nested"]["level1"]["level2"]["level3"]["data"],
+            [99, 100, 101],
+        )
 
     def test_concurrent_json_extraction_simulation(self):
         """Test the parser's ability to extract multiple JSONs from a complex, interleaved text"""
-        llm_response = '''
+        llm_response = """
         Here are three completely different datasets that you requested:
 
         First, the user analytics:
@@ -379,11 +405,13 @@ class TestIntegration(unittest.TestCase):
         }
 
         All of these JSON objects should be properly extracted despite the mixed formatting and surrounding text.
-        '''
-        
+        """
+
         result = parse_jsons(llm_response)
-        self.assertGreaterEqual(len(result), 5)  # Should find at least 5 distinct JSON objects
-        
+        self.assertGreaterEqual(
+            len(result), 5
+        )  # Should find at least 5 distinct JSON objects
+
         # Create easy lookup to verify objects by distinctive fields
         user_analytics = None
         products = None
@@ -391,7 +419,7 @@ class TestIntegration(unittest.TestCase):
         settings = None
         user_profiles = None
         event = None
-        
+
         for obj in result:
             if isinstance(obj, dict):
                 if "user_analytics" in obj:
@@ -406,7 +434,7 @@ class TestIntegration(unittest.TestCase):
                     event = obj
             elif isinstance(obj, list) and len(obj) > 0 and "preferences" in obj[0]:
                 user_profiles = obj
-        
+
         # Verify that we found the main objects
         self.assertIsNotNone(user_analytics, "Failed to extract user analytics JSON")
         self.assertIsNotNone(products, "Failed to extract products JSON")
@@ -414,7 +442,7 @@ class TestIntegration(unittest.TestCase):
         self.assertIsNotNone(settings, "Failed to extract settings JSON")
         self.assertIsNotNone(user_profiles, "Failed to extract user profiles JSON")
         self.assertIsNotNone(event, "Failed to extract event JSON")
-        
+
         # Verify specific nested values to ensure proper extraction
         self.assertEqual(user_analytics["user_analytics"]["active_users"], 12458)
         self.assertEqual(products["products"][2]["name"], "Super Widget")
@@ -426,7 +454,7 @@ class TestIntegration(unittest.TestCase):
 
     def test_multiple_json_formats_in_one_response(self):
         """Test the parser with a realistic LLM response containing multiple JSON formats"""
-        llm_response = '''
+        llm_response = """
         # Analysis of Your Request
 
         Based on your query, I've prepared several examples demonstrating different ways JSON might appear in LLM responses:
@@ -496,17 +524,17 @@ class TestIntegration(unittest.TestCase):
         ```
 
         Does this help with your visualization needs?
-        '''
-        
+        """
+
         result = parse_jsons(llm_response)
         self.assertGreaterEqual(len(result), 4)
-        
+
         # Create trackers for each expected JSON
         intent_analysis = None
         dataset = None
         chart_config = None
         nested_data = None
-        
+
         # Find each expected JSON
         for obj in result:
             if isinstance(obj, dict):
@@ -518,15 +546,17 @@ class TestIntegration(unittest.TestCase):
                     nested_data = obj
             elif isinstance(obj, list) and len(obj) > 0 and "region" in obj[0]:
                 dataset = obj
-                
+
         # Test that we found each expected object
         self.assertIsNotNone(intent_analysis, "Failed to extract intent analysis")
         self.assertIsNotNone(dataset, "Failed to extract dataset array")
         self.assertIsNotNone(chart_config, "Failed to extract chart configuration")
         self.assertIsNotNone(nested_data, "Failed to extract nested data format")
-        
+
         # Additional checks on the content
-        self.assertEqual(intent_analysis["request_analysis"]["intent"], "data_visualization")
+        self.assertEqual(
+            intent_analysis["request_analysis"]["intent"], "data_visualization"
+        )
         self.assertEqual(len(dataset), 4)
         self.assertEqual(dataset[3]["region"], "West")
         self.assertTrue(chart_config["show_legend"])
@@ -536,38 +566,47 @@ class TestIntegration(unittest.TestCase):
         """Test parser with realistic extraction scenarios that might occur in applications"""
         test_cases = [
             # Case 1: JSON inside an API response simulation
-            ('''
+            (
+                """
             HTTP/1.1 200 OK
             Content-Type: application/json
             
             {"status":"success","data":{"user_id":12345,"token":"abc123"}}
-            ''', 1),
-            
+            """,
+                1,
+            ),
             # Case 2: JSON in HTML-like context
-            ('''
+            (
+                """
             <div class="response">
               <pre>{"success":true,"count":42}</pre>
               <p>The operation completed successfully</p>
             </div>
-            ''', 1),
-            
+            """,
+                1,
+            ),
             # Case 3: Multiple JSON objects in logging-like format
-            ('''
+            (
+                """
             [2023-08-15 14:32:10] INFO: Request received {"method":"GET","path":"/api/user/123"}
             [2023-08-15 14:32:11] DEBUG: Processing {"user_id":123,"permissions":["read","write"]}
             [2023-08-15 14:32:12] INFO: Response sent {"status":200,"body":{"name":"John","email":"john@example.com"}}
-            ''', 3),
-            
+            """,
+                3,
+            ),
             # Case 4: JSON in SQL-like statement
-            ('''
+            (
+                """
             INSERT INTO logs (timestamp, data) VALUES (
               '2023-08-15 15:45:23',
               '{"event":"user_login","user_id":456,"ip":"192.168.1.1","success":true}'
             );
-            ''', 1),
-            
+            """,
+                1,
+            ),
             # Case 5: Malformed JSON in real-world context with recovery possible
-            ('''
+            (
+                """
             The API returned a malformed response: 
             {"status":"error",
              "message":"Database timeout",
@@ -575,14 +614,20 @@ class TestIntegration(unittest.TestCase):
              // This field is deprecated
              "error_code":5004,
             }
-            ''', 1)
+            """,
+                1,
+            ),
         ]
-        
+
         for i, (input_str, expected_count) in enumerate(test_cases):
             with self.subTest(f"Real-world case {i+1}"):
                 result = parse_jsons(input_str)
-                self.assertGreaterEqual(len(result), expected_count, 
-                                      f"Expected at least {expected_count} JSON objects, got {len(result)}")
+                self.assertGreaterEqual(
+                    len(result),
+                    expected_count,
+                    f"Expected at least {expected_count} JSON objects, got {len(result)}",
+                )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

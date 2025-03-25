@@ -1,34 +1,38 @@
 import unittest
+
 from llm_output_parser.jsons_parser import parse_jsons
+
 
 class TestJsonCodeBlocks(unittest.TestCase):
     def test_json_in_code_block(self):
         """Test extracting JSON from a code block with triple backticks"""
-        json_str = '''
+        json_str = """
         Here is a JSON object:
         ```json
         {"name": "Alice", "skills": ["python", "javascript"]}
         ```
-        '''
+        """
         result = parse_jsons(json_str)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0], {"name": "Alice", "skills": ["python", "javascript"]})
+        self.assertEqual(
+            result[0], {"name": "Alice", "skills": ["python", "javascript"]}
+        )
 
     def test_json_in_unmarked_code_block(self):
         """Test extracting JSON from a code block without the json marker"""
-        json_str = '''
+        json_str = """
         Here is another JSON object:
         ```
         {"name": "Bob", "active": true}
         ```
-        '''
+        """
         result = parse_jsons(json_str)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0], {"name": "Bob", "active": True})
 
     def test_multiple_code_blocks(self):
         """Test extracting multiple JSON objects from separate code blocks"""
-        json_str = '''
+        json_str = """
         First JSON:
         ```json
         {"id": 1, "type": "user"}
@@ -38,7 +42,7 @@ class TestJsonCodeBlocks(unittest.TestCase):
         ```json
         {"id": 2, "type": "admin"}
         ```
-        '''
+        """
         result = parse_jsons(json_str)
         self.assertEqual(len(result), 2)
         self.assertIn({"id": 1, "type": "user"}, result)
@@ -46,7 +50,7 @@ class TestJsonCodeBlocks(unittest.TestCase):
 
     def test_json_with_whitespace_in_code_block(self):
         """Test extracting JSON with extra whitespace in code blocks"""
-        json_str = '''
+        json_str = """
         ```json
         
         {
@@ -55,14 +59,14 @@ class TestJsonCodeBlocks(unittest.TestCase):
         }
         
         ```
-        '''
+        """
         result = parse_jsons(json_str)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0], {"name": "Charlie", "age": 42})
 
     def test_nested_code_blocks(self):
         """Test parsing with nested code blocks (code blocks inside code blocks)"""
-        json_str = '''
+        json_str = """
         Here's an example of how code blocks might be nested in documentation:
         
         ```markdown
@@ -86,8 +90,8 @@ class TestJsonCodeBlocks(unittest.TestCase):
         ```json
         {"status": "success"}
         ```
-        '''
-        
+        """
+
         result = parse_jsons(json_str)
         # The parser should find at least the non-nested JSON
         self.assertGreaterEqual(len(result), 1)
@@ -96,7 +100,7 @@ class TestJsonCodeBlocks(unittest.TestCase):
 
     def test_malformed_code_blocks(self):
         """Test extracting JSON from malformed or incomplete code blocks"""
-        json_str = '''
+        json_str = """
         1. Incomplete closing backticks:
         ```json
         {"incomplete": true}
@@ -120,8 +124,8 @@ class TestJsonCodeBlocks(unittest.TestCase):
         ```json
         {"valid": true}
         ```
-        '''
-        
+        """
+
         result = parse_jsons(json_str)
         # Should at least find the valid one
         self.assertGreaterEqual(len(result), 1)
@@ -130,7 +134,7 @@ class TestJsonCodeBlocks(unittest.TestCase):
 
     def test_code_blocks_with_indentation_and_formatting(self):
         """Test JSON in code blocks with various indentation styles and formatting"""
-        json_str = '''
+        json_str = """
         Example with indented code block:
             ```json
             {
@@ -154,16 +158,16 @@ class TestJsonCodeBlocks(unittest.TestCase):
         }
         ```
         </div>
-        '''
-        
+        """
+
         result = parse_jsons(json_str)
         self.assertGreaterEqual(len(result), 3)
-        
+
         # Check if all expected objects are found
         found_indented = False
         found_inline = False
         found_html = False
-        
+
         for obj in result:
             if isinstance(obj, dict):
                 if "indented" in obj and obj["indented"]["deeply"]["nested"] is True:
@@ -172,14 +176,14 @@ class TestJsonCodeBlocks(unittest.TestCase):
                     found_inline = True
                 if "html" in obj and obj["html"] == "like":
                     found_html = True
-        
+
         self.assertTrue(found_indented, "Failed to find indented JSON")
         self.assertTrue(found_inline, "Failed to find inline JSON")
         self.assertTrue(found_html, "Failed to find HTML-surrounded JSON")
 
     def test_real_world_llm_complex_response(self):
         """Test with a complex, realistic LLM response containing multiple formats"""
-        json_str = '''
+        json_str = """
         # Analysis of Customer Feedback
 
         Based on the data you provided, I've analyzed the customer feedback and categorized it:
@@ -230,38 +234,38 @@ class TestJsonCodeBlocks(unittest.TestCase):
         }
 
         Let me know if you need any clarification on these insights!
-        '''
-        
+        """
+
         result = parse_jsons(json_str)
         self.assertGreaterEqual(len(result), 3)
-        
+
         # Check for sentiment analysis
         sentiment_found = False
         nps_found = False
         dashboard_found = False
-        
+
         for obj in result:
             if isinstance(obj, dict) and "sentiment_summary" in obj:
                 sentiment_found = True
                 self.assertEqual(len(obj["top_themes"]), 4)
                 self.assertEqual(obj["top_themes"][0]["theme"], "product_quality")
-            
+
             if isinstance(obj, list) and len(obj) > 0 and "month" in obj[0]:
                 nps_found = True
                 self.assertEqual(len(obj), 5)
                 self.assertEqual(obj[2]["nps"], 47)
-            
+
             if isinstance(obj, dict) and "dashboard" in obj:
                 dashboard_found = True
                 self.assertTrue(obj["dashboard"]["alerts_enabled"])
-        
+
         self.assertTrue(sentiment_found, "Failed to extract sentiment analysis JSON")
         self.assertTrue(nps_found, "Failed to extract NPS scores JSON")
         self.assertTrue(dashboard_found, "Failed to extract dashboard config JSON")
 
     def test_ambiguous_code_blocks(self):
         """Test scenarios where code blocks might be parsed ambiguously"""
-        json_str = '''
+        json_str = """
         Here's a tricky example:
         
         ```
@@ -287,15 +291,15 @@ class TestJsonCodeBlocks(unittest.TestCase):
         ```
         
         And an inline code example: `{"inline": true}`
-        '''
-        
+        """
+
         result = parse_jsons(json_str)
-        
+
         # It should find at least the valid JSON objects
         valid_found = False
         unmarked_found = False
         inline_found = False
-        
+
         for obj in result:
             if isinstance(obj, dict):
                 if "valid" in obj and obj["valid"] is True:
@@ -304,11 +308,11 @@ class TestJsonCodeBlocks(unittest.TestCase):
                     unmarked_found = True
                 if "inline" in obj and obj["inline"] is True:
                     inline_found = True
-        
+
         self.assertTrue(valid_found, "Failed to find JSON in marked code block")
         self.assertTrue(unmarked_found, "Failed to find JSON in unmarked code block")
         self.assertTrue(inline_found, "Failed to find inline JSON")
-        
+
         # Make sure the non-JSON wasn't incorrectly parsed
         for obj in result:
             if isinstance(obj, dict) and "not" in obj:
@@ -316,7 +320,7 @@ class TestJsonCodeBlocks(unittest.TestCase):
 
     def test_competing_extraction_methods(self):
         """Test a case where multiple extraction methods would find different results"""
-        json_str = '''
+        json_str = """
         # Example with multiple competing extraction methods
         
         Here's a JSON object inside a code block:
@@ -338,29 +342,37 @@ class TestJsonCodeBlocks(unittest.TestCase):
         {"outer": {"inner": {"value": 123}}}
         
         With a similar inner piece: {"inner": {"value": 123}}
-        '''
-        
+        """
+
         result = parse_jsons(json_str)
-        
+
         # Verify all expected objects were found
         code_block_json = {"name": "Code Block JSON", "type": "marked"}
         raw_json = {"name": "Raw JSON", "type": "unmarked"}
         outer_json = {"outer": {"inner": {"value": 123}}}
         inner_json = {"inner": {"value": 123}}
-        
+
         self.assertIn(code_block_json, result)
         self.assertIn(raw_json, result)
         self.assertIn(inner_json, result)
         self.assertIn(outer_json, result)
-        
+
         # Also check for the array
         array_found = False
         for obj in result:
-            if isinstance(obj, list) and len(obj) == 2 and obj[0]["id"] == 1 and obj[1]["id"] == 2:
+            if (
+                isinstance(obj, list)
+                and len(obj) == 2
+                and obj[0]["id"] == 1
+                and obj[1]["id"] == 2
+            ):
                 array_found = True
                 break
-                
-        self.assertTrue(array_found, "Failed to find the JSON array in unmarked code block")
 
-if __name__ == '__main__':
+        self.assertTrue(
+            array_found, "Failed to find the JSON array in unmarked code block"
+        )
+
+
+if __name__ == "__main__":
     unittest.main()

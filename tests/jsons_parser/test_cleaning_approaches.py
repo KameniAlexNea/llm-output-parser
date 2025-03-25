@@ -1,17 +1,19 @@
 import unittest
+
 from llm_output_parser.jsons_parser import parse_jsons
+
 
 class TestCleaningApproaches(unittest.TestCase):
     def test_json_with_comments(self):
         """Test parsing JSON with JavaScript-style comments"""
-        json_str = '''
+        json_str = """
         {
             "name": "Product", // This is the product name
             "price": 29.99, /* This is 
             a multi-line comment */
             "inStock": true
         }
-        '''
+        """
         result = parse_jsons(json_str)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["name"], "Product")
@@ -20,7 +22,7 @@ class TestCleaningApproaches(unittest.TestCase):
 
     def test_json_with_trailing_commas(self):
         """Test parsing JSON with trailing commas (not standard JSON)"""
-        json_str = '''
+        json_str = """
         {
             "items": [
                 "apple",
@@ -32,7 +34,7 @@ class TestCleaningApproaches(unittest.TestCase):
                 "visible": false,
             }
         }
-        '''
+        """
         result = parse_jsons(json_str)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["items"], ["apple", "banana", "orange"])
@@ -48,7 +50,7 @@ class TestCleaningApproaches(unittest.TestCase):
 
     def test_json_with_mixed_issues(self):
         """Test parsing JSON with multiple issues that require cleaning"""
-        json_str = '''
+        json_str = """
         {
             // Configuration
             "server": "example.com",
@@ -62,7 +64,7 @@ class TestCleaningApproaches(unittest.TestCase):
                disabled in production */
             "debug": false,
         }
-        '''
+        """
         result = parse_jsons(json_str)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["server"], "example.com")
@@ -72,7 +74,7 @@ class TestCleaningApproaches(unittest.TestCase):
 
     def test_complex_json_with_multiline_comments(self):
         """Test parsing JSON with complex multiline comments in various positions"""
-        json_str = '''
+        json_str = """
         {
             /* This is a header comment
                that spans multiple lines
@@ -126,24 +128,24 @@ class TestCleaningApproaches(unittest.TestCase):
                 }
             }
         }
-        '''
-        
+        """
+
         result = parse_jsons(json_str)
         self.assertEqual(len(result), 1)
-        
+
         config = result[0]["config"]
-        
+
         # Verify database config
         self.assertEqual(config["database"]["host"], "db.example.com")
         self.assertEqual(config["database"]["port"], 5432)
         self.assertEqual(config["database"]["options"]["timeout"], 30)
         self.assertTrue(config["database"]["options"]["ssl"])
-        
+
         # Verify server config
         self.assertEqual(config["server"]["host"], "0.0.0.0")
         self.assertEqual(config["server"]["workers"], 4)
         self.assertEqual(config["server"]["rate_limit"]["requests_per_minute"], 60)
-        
+
         # Verify features
         self.assertTrue(config["features"]["new_dashboard"])
         self.assertFalse(config["features"]["beta_reporting"])
@@ -152,7 +154,7 @@ class TestCleaningApproaches(unittest.TestCase):
 
     def test_json_with_exotic_trailing_commas(self):
         """Test JSON with trailing commas in various complex nested structures"""
-        json_str = '''
+        json_str = """
         {
             "arrays": {
                 "empty": [],
@@ -214,34 +216,38 @@ class TestCleaningApproaches(unittest.TestCase):
                 ],
             },
         }
-        '''
-        
+        """
+
         result = parse_jsons(json_str)
         self.assertEqual(len(result), 1)
-        
+
         data = result[0]
-        
+
         # Test arrays section
         self.assertEqual(len(data["arrays"]["empty"]), 0)
         self.assertEqual(data["arrays"]["single"], [1])
         self.assertEqual(data["arrays"]["multiple"], ["one", "two", "three"])
         self.assertEqual(data["arrays"]["nested"], [[1, 2], [3, 4]])
-        
+
         # Test objects section
         self.assertEqual(data["objects"]["empty"], {})
         self.assertEqual(data["objects"]["simple"]["key"], "value")
-        self.assertEqual(data["objects"]["nested"]["level1"]["level2"]["level3"], "deep")
-        
+        self.assertEqual(
+            data["objects"]["nested"]["level1"]["level2"]["level3"], "deep"
+        )
+
         # Test mixed section
         self.assertEqual(len(data["mixed"]["arrays_in_objects"]["data"]), 2)
-        self.assertEqual(data["mixed"]["arrays_in_objects"]["data"][1]["name"], "Item 2")
+        self.assertEqual(
+            data["mixed"]["arrays_in_objects"]["data"][1]["name"], "Item 2"
+        )
         self.assertEqual(data["mixed"]["objects_in_arrays"][0]["key1"], "value1")
         self.assertEqual(data["mixed"]["complex"][0]["data"], [1, 2, 3])
         self.assertEqual(data["mixed"]["complex"][0]["metadata"]["type"], "numbers")
 
     def test_json_with_literal_control_characters_everywhere(self):
         """Test JSON with literal control characters in various positions"""
-        json_str = '''
+        json_str = """
         {
             "string_with_escapes": "This string has
             a newline and	a tab",
@@ -262,11 +268,11 @@ with a newline",
                 }
             }
         }
-        '''
-        
+        """
+
         result = parse_jsons(json_str)
         self.assertEqual(len(result), 1)
-        
+
         data = result[0]
         self.assertTrue(data["string_with_escapes"].find("\n") > 0)
         self.assertTrue(data["string_with_escapes"].find("\t") > 0)
@@ -279,7 +285,7 @@ with a newline",
 
     def test_mixed_coding_styles_and_issues(self):
         """Test JSON with a mix of different coding styles and issues that need cleaning"""
-        json_str = '''
+        json_str = """
         {
             // General configuration
             "appName": "SuperApp", /* This is the main application name */
@@ -352,36 +358,38 @@ and Analytics",  // Note the literal newline here
                 "max_records_per_page": 500,
             },
         }
-        '''
-        
+        """
+
         result = parse_jsons(json_str)
         self.assertEqual(len(result), 1)
-        
+
         data = result[0]
-        
+
         # Check basic fields
         self.assertEqual(data["appName"], "SuperApp")
-        
+
         # Check database settings with trailing commas removed
         self.assertEqual(len(data["database"]["hosts"]), 3)
         self.assertEqual(data["database"]["hosts"][2], "dr.db.example.com")
         self.assertEqual(data["database"]["credentials"]["username"], "db_user")
         self.assertEqual(data["database"]["pooling"]["timeout"], 30)
-        
+
         # Check UI settings with complex comments and literal newlines
         self.assertEqual(data["ui"]["theme"], "auto")
         self.assertEqual(len(data["ui"]["sidebar"]["menu_items"]), 3)
-        self.assertEqual(data["ui"]["sidebar"]["menu_items"][0]["acl"], ["user", "admin"])
+        self.assertEqual(
+            data["ui"]["sidebar"]["menu_items"][0]["acl"], ["user", "admin"]
+        )
         # This should have the literal newline preserved
         self.assertTrue("\n" in data["ui"]["sidebar"]["menu_items"][1]["label"])
-        
+
         # Check system limits section
         self.assertEqual(data["limits"]["requests_per_minute"], 100)
         self.assertEqual(data["limits"]["max_file_size"], 25)
 
     def test_mixed_cleaning_needs(self):
         """Test parsing JSON that requires multiple cleaning approaches simultaneously"""
-        json_str = '''
+        json_str = """
         {
             // Config with multiple issues
             "server": {
@@ -412,11 +420,11 @@ and Analytics",  // Note the literal newline here
                 }
             }
         }
-        '''
-        
+        """
+
         result = parse_jsons(json_str)
         self.assertEqual(len(result), 1)
-        
+
         # Verify the parser handled multiple cleaning issues correctly
         self.assertEqual(len(result[0]["server"]["hosts"]), 2)
         self.assertEqual(result[0]["server"]["ports"], [80, 443])
@@ -430,15 +438,13 @@ and Analytics",  // Note the literal newline here
         test_cases = [
             # Case 1: Valid JSON, no cleaning needed
             ('{"simple":true}', True),
-            
             # Case 2: Simple trailing comma, light cleaning needed
             ('{"items":[1,2,3,]}', True),
-            
             # Case 3: Comments, moderate cleaning needed
             ('{"debug":true,/*comment*/}', True),
-            
             # Case 4: Complex mix requiring aggressive cleaning
-            ('''
+            (
+                """
             {
                 // Settings
                 "verbose": true,
@@ -448,15 +454,15 @@ and Analytics",  // Note the literal newline here
                     "high",
                 ],
             }
-            ''', True),
-            
+            """,
+                True,
+            ),
             # Case 5: Beyond repair, should fail
             ('{"broken": [1,2,', False),
-            
             # Case 6: Control characters requiring special handling
-            ('{"message":"Hello\nWorld"}', True)
+            ('{"message":"Hello\nWorld"}', True),
         ]
-        
+
         for i, (json_str, should_succeed) in enumerate(test_cases):
             with self.subTest(f"Progressive cleaning case {i+1}"):
                 try:
@@ -470,5 +476,6 @@ and Analytics",  // Note the literal newline here
                         self.fail(f"Case {i+1} should have succeeded but failed")
                     # If we're here and should_succeed is False, the test passes
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

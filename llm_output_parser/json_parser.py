@@ -1,6 +1,7 @@
 import json
 import re
 
+
 def parse_json(json_str: str):
     """
     Parses a JSON object from a string that may contain extra text.
