@@ -50,13 +50,35 @@ def parse_json(json_str: str):
     extract_json_objects(json_str, '[', ']', parsed_jsons)
 
     if parsed_jsons:
-        # Return the most comprehensive JSON (the one with the longest string representation)
-        return max(parsed_jsons, key=lambda x: len(x[1]))[0]
+        # Sort by complexity: First by length of serialized JSON, then by depth
+        sorted_jsons = sorted(parsed_jsons, 
+                              key=lambda x: (len(x[1]), json_structure_depth(x[0])), 
+                              reverse=True)
+        return sorted_jsons[0][0]
     else:
         raise ValueError("Failed to parse JSON from the input string.")
 
 
-def extract_json_objects(text, open_delimiter, close_delimiter, results):
+def json_structure_depth(obj):
+    """
+    Calculate the depth of a JSON structure.
+    
+    :param obj: The JSON object (dict or list)
+    :return: The maximum nesting depth
+    """
+    if isinstance(obj, dict):
+        if not obj:
+            return 1
+        return 1 + max(json_structure_depth(v) for v in obj.values())
+    elif isinstance(obj, list):
+        if not obj:
+            return 1
+        return 1 + max(json_structure_depth(item) for item in obj)
+    else:
+        return 0
+
+
+def extract_json_objects(text: str, open_delimiter: str, close_delimiter: str, results: list[str]):
     """
     Extracts all valid JSON objects or arrays from the text with properly balanced delimiters.
     
@@ -107,7 +129,10 @@ def extract_json_objects(text, open_delimiter, close_delimiter, results):
             # Attempt to parse it
             try:
                 parsed = json.loads(json_str)
-                results.append((parsed, json_str))
+                
+                # Check if this is a valid JSON object/array and not just a string literal
+                if isinstance(parsed, (dict, list)):
+                    results.append((parsed, json_str))
             except json.JSONDecodeError:
                 pass
                 

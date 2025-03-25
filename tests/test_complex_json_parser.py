@@ -237,7 +237,12 @@ class TestComplexJsonParser(unittest.TestCase):
         }
         """
         result = parse_json(json_inception)
+        # Verify we got the outer JSON object with all properties
+        self.assertIn("metadata", result)
+        self.assertIn("rawConfig", result)
+        self.assertIn("rawData", result)
         self.assertEqual(result["metadata"]["description"], "This JSON contains another JSON as a string")
+        
         # rawConfig and rawData should be strings, not parsed JSON
         self.assertIsInstance(result["rawConfig"], str)
         self.assertIsInstance(result["rawData"], str)
@@ -245,6 +250,59 @@ class TestComplexJsonParser(unittest.TestCase):
         # But we can parse them separately
         config = json.loads(result["rawConfig"])
         self.assertEqual(config["port"], 8080)
+        
+        # Test a more complex case with multiple levels of stringified JSON
+        nested_inception = """
+        {
+            "outer": "Simple value",
+            "nested": {
+                "stringified": "{\\\"deeply\\\": {\\\"nested\\\": \\\"value\\\"}}",
+                "array_str": "[1, 2, {\\\"key\\\": \\\"value\\\"}]",
+                "normal": {"key": "value"}
+            }
+        }
+        """
+        result = parse_json(nested_inception)
+        self.assertIn("outer", result)
+        self.assertIn("nested", result)
+        self.assertIsInstance(result["nested"]["stringified"], str)
+        self.assertIsInstance(result["nested"]["array_str"], str)
+        self.assertIsInstance(result["nested"]["normal"], dict)
+        
+        # Verify the outermost JSON is chosen over any stringified JSON
+        deeply_parsed = json.loads(result["nested"]["stringified"])
+        self.assertEqual(deeply_parsed["deeply"]["nested"], "value")
+
+    def test_competing_json_priorities(self):
+        """Test that we prioritize the most meaningful JSON when multiple valid options exist."""
+        competing_jsons = """
+        Here's a small array: [1, 2, 3]
+        
+        Here's an object with a stringified array:
+        {
+            "name": "Test",
+            "data": "[1, 2, 3, 4, 5]"
+        }
+        
+        And here's another array: [1, 2, 3, 4, 5, 6]
+        """
+        result = parse_json(competing_jsons)
+        # Should choose the object as it's more complex than either array
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["name"], "Test")
+        self.assertEqual(result["data"], "[1, 2, 3, 4, 5]")
+        
+        # Test case where we have objects of similar size but different depth
+        depth_vs_size = """
+        {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5}
+        
+        {"x": {"y": {"z": 123}}}
+        """
+        result = parse_json(depth_vs_size)
+        # Should choose the deeper object even though it has fewer keys overall
+        self.assertIn("x", result)
+        self.assertIn("y", result["x"])
+        self.assertEqual(result["x"]["y"]["z"], 123)
 
 
 if __name__ == "__main__":
