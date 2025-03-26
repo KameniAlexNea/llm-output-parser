@@ -1,0 +1,2 @@
+gradio==5.23.1
+llm-output-parser==0.2.0
