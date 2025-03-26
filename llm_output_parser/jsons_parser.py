@@ -2,33 +2,33 @@ import json
 import re
 
 
-def parse_json(json_str: str):
+def parse_jsons(json_str: str):
     """
-    Parses a JSON object from a string that may contain extra text.
+    Parses all JSON objects from a string that may contain extra text.
 
-    This function attempts three approaches to extract JSON:
+    This function attempts several approaches to extract JSON:
 
     1. Directly parsing the entire string.
     2. Extracting JSON enclosed within triple backticks (```json ... ```).
     3. Extracting all valid JSON objects or arrays with balanced delimiters.
 
-    :param json_str: The input string potentially containing a JSON object.
+    :param json_str: The input string potentially containing JSON objects.
     :type json_str: str
-    :return: The parsed JSON object if successfully extracted, otherwise None.
-    :rtype: dict or list or None
+    :return: A list of all parsed JSON objects found in the input string.
+    :rtype: list of dict or list
     """
     if json_str is None or not isinstance(json_str, str):
         raise TypeError("Input must be a non-empty string.")
     if not json_str:
         raise ValueError("Input string is empty.")
 
-    # Store all successfully parsed JSON objects
-    parsed_jsons = []
+    # Store all successfully parsed JSON objects with their span coordinates
+    parsed_jsons_with_spans = []
 
     # Attempt 1: Try to load the entire string as JSON.
     try:
         parsed = json.loads(json_str)
-        parsed_jsons.append((parsed, json_str))
+        parsed_jsons_with_spans.append((parsed, 0, len(json_str)))
     except json.JSONDecodeError:
         pass
 
@@ -39,26 +39,27 @@ def parse_json(json_str: str):
         json_block = match.group(1)
         try:
             parsed = json.loads(json_block)
-            parsed_jsons.append((parsed, json_block))
+            # Store with the position in the original string
+            block_start = match.start()
+            block_end = match.end()
+            parsed_jsons_with_spans.append((parsed, block_start, block_end))
         except json.JSONDecodeError:
             pass
 
     # Attempt 3: Extract JSON objects with balanced delimiters
-    _extract_json_objects(json_str, "{", "}", parsed_jsons)
+    _extract_json_objects(json_str, "{", "}", parsed_jsons_with_spans)
 
     # Attempt 4: Extract JSON arrays with balanced delimiters
-    _extract_json_objects(json_str, "[", "]", parsed_jsons)
+    _extract_json_objects(json_str, "[", "]", parsed_jsons_with_spans)
 
-    if parsed_jsons:
-        # Sort by complexity: First by length of serialized JSON, then by depth
-        sorted_jsons = sorted(
-            parsed_jsons,
-            key=lambda x: (len(x[1]), _json_structure_depth(x[0])),
-            reverse=True,
-        )
-        return sorted_jsons[0][0]
-    else:
-        raise ValueError("Failed to parse JSON from the input string.")
+    if not parsed_jsons_with_spans:
+        raise ValueError("Failed to parse any JSON from the input string.")
+
+    # Remove overlapping JSON objects (keep non-overlapping ones)
+    non_overlapping = _remove_overlapping_jsons(parsed_jsons_with_spans)
+
+    # Return just the parsed JSON objects without the spans
+    return [item[0] for item in non_overlapping]
 
 
 def _json_structure_depth(obj):
@@ -89,7 +90,7 @@ def _extract_json_objects(
     :param text: The text to search in
     :param open_delimiter: Opening delimiter ('{' or '[')
     :param close_delimiter: Closing delimiter ('}' or ']')
-    :param results: List to append results to (tuple of (parsed_json, json_string))
+    :param results: List to append results to (tuple of (parsed_json, start_pos, end_pos))
     """
     i = 0
     while i < len(text):
@@ -131,24 +132,28 @@ def _extract_json_objects(
             json_str = text[start:pos]
 
             # Try multiple parsing approaches
-            _try_parse_with_approaches(json_str, results)
+            _try_parse_with_approaches(json_str, start, pos, results)
 
         # Move to position after the current match to look for more
         i = pos if balance == 0 else start + 1
 
 
-def _try_parse_with_approaches(json_str: str, results: list):
+def _try_parse_with_approaches(
+    json_str: str, start_pos: int, end_pos: int, results: list
+):
     """
     Attempts to parse a JSON string using multiple approaches.
 
     :param json_str: The JSON string to parse
-    :param results: List to append results to
+    :param start_pos: The starting position of the JSON string in the original text
+    :param end_pos: The ending position of the JSON string in the original text
+    :param results: List to append results to with position information
     """
     # Approach 1: Direct parsing
     try:
         parsed = json.loads(json_str)
         if isinstance(parsed, (dict, list)):
-            results.append((parsed, json_str))
+            results.append((parsed, start_pos, end_pos))
         return  # Successfully parsed, no need to try other approaches
     except json.JSONDecodeError:
         pass
@@ -170,7 +175,7 @@ def _try_parse_with_approaches(json_str: str, results: list):
 
         parsed = json.loads(cleaned)
         if isinstance(parsed, (dict, list)):
-            results.append((parsed, cleaned))
+            results.append((parsed, start_pos, end_pos))
         return  # Successfully parsed after cleaning
     except json.JSONDecodeError:
         pass
@@ -186,7 +191,7 @@ def _try_parse_with_approaches(json_str: str, results: list):
 
         parsed = json.loads(aggressive_cleaned)
         if isinstance(parsed, (dict, list)):
-            results.append((parsed, aggressive_cleaned))
+            results.append((parsed, start_pos, end_pos))
         return  # Successfully parsed after aggressive cleaning
     except json.JSONDecodeError:
         pass
@@ -224,7 +229,7 @@ def _try_parse_with_approaches(json_str: str, results: list):
 
         parsed = json.loads(unescaped)
         if isinstance(parsed, (dict, list)):
-            results.append((parsed, unescaped))
+            results.append((parsed, start_pos, end_pos))
     except (json.JSONDecodeError, Exception):
         # If all approaches fail, don't add anything to results
         pass
@@ -308,3 +313,30 @@ def _remove_comments_comprehensive(text):
         i += 1
 
     return "".join(result)
+
+
+def _remove_overlapping_jsons(jsons_with_spans):
+    """
+    Removes overlapping JSON objects from the results.
+
+    When JSONs overlap, we keep the one that appears first in the original text.
+
+    :param jsons_with_spans: List of tuples (parsed_json, start_pos, end_pos)
+    :return: List of non-overlapping JSON objects with their spans
+    """
+    if not jsons_with_spans:
+        return []
+
+    # Sort by start position to process in order of appearance
+    sorted_jsons = sorted(jsons_with_spans, key=lambda x: x[1])
+
+    non_overlapping = [sorted_jsons[0]]
+    last_end = sorted_jsons[0][2]
+
+    for json_item, start, end in sorted_jsons[1:]:
+        # If this item starts after the last one ends (no overlap)
+        if start >= last_end:
+            non_overlapping.append((json_item, start, end))
+            last_end = end
+
+    return non_overlapping

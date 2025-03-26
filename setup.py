@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="llm-output-parser",
-    version="0.1.0",
+    version="0.2.0",
     author="Alex Kameni",
     author_email="Kamenialexnea@gmail.com",
     description="Extract and parse JSON from unstructured text outputs from LLMs",

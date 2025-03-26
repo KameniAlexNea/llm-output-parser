@@ -1,6 +1,6 @@
 import re
 import xml.etree.ElementTree as ET
-from typing import Dict, List, Union, Optional, Tuple, Any
+from typing import Dict
 
 
 def parse_xml(xml_str: str) -> Dict:
@@ -46,9 +46,9 @@ def parse_xml(xml_str: str) -> Dict:
     # Attempt 3: Extract XML with balanced tags
     xml_patterns = [
         r"<\?xml.*?\?>.*?<([a-zA-Z0-9_:]+)(?:\s+[^>]*)?>(.*?)</\1>",  # XML with declaration
-        r"<([a-zA-Z0-9_:]+)(?:\s+[^>]*)?>(.*?)</\1>"  # XML without declaration
+        r"<([a-zA-Z0-9_:]+)(?:\s+[^>]*)?>(.*?)</\1>",  # XML without declaration
     ]
-    
+
     for pattern in xml_patterns:
         matches = re.finditer(pattern, xml_str, re.DOTALL)
         for match in matches:
@@ -64,7 +64,7 @@ def parse_xml(xml_str: str) -> Dict:
         sorted_xmls = sorted(
             parsed_xmls,
             key=lambda x: (len(x[1]), _xml_structure_depth(x[0])),
-            reverse=True
+            reverse=True,
         )
         # Convert the most complex XML to JSON format
         return _xml_to_json(sorted_xmls[0][0])
@@ -92,11 +92,11 @@ def _xml_to_json(element: ET.Element) -> Dict:
     :return: A dictionary representation of the XML
     """
     result = {}
-    
+
     # Add attributes as "@attribute_name": value
     if element.attrib:
         result.update({f"@{k}": v for k, v in element.attrib.items()})
-    
+
     # Process child elements
     child_elements = {}
     for child in element:
@@ -109,10 +109,10 @@ def _xml_to_json(element: ET.Element) -> Dict:
                 child_elements[child.tag] = [child_elements[child.tag], child_json]
         else:
             child_elements[child.tag] = child_json
-    
+
     # Add child elements to result
     result.update(child_elements)
-    
+
     # Add text content if present and not whitespace-only
     if element.text and element.text.strip():
         # If the element has no attributes and no children, just return the text
@@ -120,5 +120,5 @@ def _xml_to_json(element: ET.Element) -> Dict:
             return element.text.strip()
         else:
             result["#text"] = element.text.strip()
-    
+
     return result

@@ -1,4 +1,5 @@
 import unittest
+
 from llm_output_parser import parse_xml
 
 
@@ -27,25 +28,31 @@ class TestXmlParserEdgeCases(unittest.TestCase):
         """Test that invalid XML raises a ValueError."""
         with self.assertRaises(ValueError) as context:
             parse_xml("This is not XML at all")
-        self.assertIn("Failed to parse XML from the input string", str(context.exception))
+        self.assertIn(
+            "Failed to parse XML from the input string", str(context.exception)
+        )
 
     def test_malformed_xml(self):
         """Test handling malformed XML."""
         with self.assertRaises(ValueError) as context:
             parse_xml("<root><unclosed>")
-        self.assertIn("Failed to parse XML from the input string", str(context.exception))
+        self.assertIn(
+            "Failed to parse XML from the input string", str(context.exception)
+        )
 
     def test_broken_xml_in_code_block(self):
         """Test handling broken XML in a code block."""
-        text = '''
+        text = """
         ```xml
         <root>
             <broken>
         ```
-        '''
+        """
         with self.assertRaises(ValueError) as context:
             parse_xml(text)
-        self.assertIn("Failed to parse XML from the input string", str(context.exception))
+        self.assertIn(
+            "Failed to parse XML from the input string", str(context.exception)
+        )
 
     def test_empty_element(self):
         """Test parsing an empty XML element."""
@@ -55,28 +62,30 @@ class TestXmlParserEdgeCases(unittest.TestCase):
     def test_self_closing_tags(self):
         """Test parsing self-closing tags."""
         result = parse_xml("<root><item/></root>")
-        self.assertEqual(result, {'item': {}})
+        self.assertEqual(result, {"item": {}})
 
     def test_xml_with_entity_references(self):
         """Test parsing XML with entity references."""
-        result = parse_xml('<root><item>Less than: &lt; Greater than: &gt;</item></root>')
-        self.assertEqual(result, {'item': 'Less than: < Greater than: >'})
+        result = parse_xml(
+            "<root><item>Less than: &lt; Greater than: &gt;</item></root>"
+        )
+        self.assertEqual(result, {"item": "Less than: < Greater than: >"})
 
     def test_xml_with_comments(self):
         """Test parsing XML with comments."""
-        xml_str = '''
+        xml_str = """
         <root>
             <!-- This is a comment -->
             <item>value</item>
         </root>
-        '''
+        """
         result = parse_xml(xml_str)
-        self.assertEqual(result, {'item': 'value'})
+        self.assertEqual(result, {"item": "value"})
 
     def test_xml_structure_depth(self):
         """Test the XML structure depth calculation indirectly through complex parsing."""
         # A deeply nested XML structure
-        xml_str = '''
+        xml_str = """
         <level1>
             <level2>
                 <level3>
@@ -86,9 +95,9 @@ class TestXmlParserEdgeCases(unittest.TestCase):
                 </level3>
             </level2>
         </level1>
-        '''
+        """
         # A less deeply nested, but longer XML structure
-        xml_str2 = '''
+        xml_str2 = """
         <root>
             <item>1</item>
             <item>2</item>
@@ -101,15 +110,15 @@ class TestXmlParserEdgeCases(unittest.TestCase):
             <item>9</item>
             <item>10</item>
         </root>
-        '''
-        
+        """
+
         # When both are present, the deeply nested one should be chosen
         combined = f"<wrapper>{xml_str}{xml_str2}</wrapper>"
         result = parse_xml(combined)
-        
+
         # The result should match the deeply nested structure, not the longer one
-        self.assertIn('level1', result)
+        self.assertIn("level1", result)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
