@@ -131,6 +131,7 @@ class TestJsonCodeBlocks(unittest.TestCase):
         self.assertGreaterEqual(len(result), 1)
         self.assertIn({"valid": True}, result)
         # Bonus if it can find any of the others
+        self.assertEqual(len(result), 5)
 
     def test_code_blocks_with_indentation_and_formatting(self):
         """Test JSON in code blocks with various indentation styles and formatting"""
