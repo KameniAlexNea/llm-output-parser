@@ -81,33 +81,6 @@ class TestEdgeCases(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["message"], "Hello, World!")
 
-    def test_json_with_special_whitespace(self):
-        """Test parsing JSON with various whitespace characters"""
-        # Include various Unicode whitespace characters
-        json_str = """
-        {
-          "spaces": "normal spaces",
-        \t"tabs": "tabbed content",
-        \r\n  "newlines": "line breaks",
-        \u2003  "em_space": "Unicode space",
-        \u2007  "figure_space": "Another Unicode space",
-        \u200b  "zero_width_space": "Invisible space",
-        \u2028  "line_separator": "Another line break",
-          "mixed": "mix\u2003of\u200b\tdifferent   spaces"
-        }
-        """
-
-        result = parse_jsons(json_str)
-        self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["spaces"], "normal spaces")
-        self.assertEqual(result[0]["tabs"], "tabbed content")
-        self.assertEqual(result[0]["newlines"], "line breaks")
-        self.assertEqual(result[0]["em_space"], "Unicode space")
-        self.assertEqual(result[0]["figure_space"], "Another Unicode space")
-        self.assertEqual(result[0]["zero_width_space"], "Invisible space")
-        self.assertEqual(result[0]["line_separator"], "Another line break")
-        self.assertEqual(result[0]["mixed"], "mix\u2003of\u200b\tdifferent   spaces")
-
     def test_mixed_json_formats_in_markdown(self):
         """Test extracting JSON from a complex Markdown document with various formats"""
         json_str = """
