@@ -157,18 +157,14 @@ def _try_parse_with_approaches(json_str: str, results: list):
     try:
         # Remove JavaScript-style comments (improved for multi-line handling)
         uncleaned = json_str
-        
+
         # First, handle multi-line comments (/* ... */)
         # This pattern uses a non-greedy match to properly handle nested structures
-        cleaned = re.sub(
-            r"/\*[\s\S]*?\*/", "", uncleaned, flags=re.DOTALL
-        )
-        
+        cleaned = re.sub(r"/\*[\s\S]*?\*/", "", uncleaned, flags=re.DOTALL)
+
         # Then handle single-line comments
-        cleaned = re.sub(
-            r"//.*?(?:\n|$)", "", cleaned, flags=re.MULTILINE
-        )
-        
+        cleaned = re.sub(r"//.*?(?:\n|$)", "", cleaned, flags=re.MULTILINE)
+
         # Remove trailing commas in objects and arrays
         cleaned = re.sub(r",\s*([\]}])", r"\1", cleaned)
 
@@ -184,10 +180,10 @@ def _try_parse_with_approaches(json_str: str, results: list):
         # Try a more comprehensive cleaning approach
         # First remove all comments completely
         aggressive_cleaned = _remove_comments_comprehensive(json_str)
-        
+
         # Then fix trailing commas
         aggressive_cleaned = re.sub(r",\s*([\]}])", r"\1", aggressive_cleaned)
-        
+
         parsed = json.loads(aggressive_cleaned)
         if isinstance(parsed, (dict, list)):
             results.append((parsed, aggressive_cleaned))
@@ -221,7 +217,7 @@ def _try_parse_with_approaches(json_str: str, results: list):
         for char, escape in control_char_map.items():
             placeholder = f"__PLACEHOLDER_{ord(char)}__"
             unescaped = unescaped.replace(placeholder, escape)
-            
+
         # Apply all cleanings together as a last resort
         unescaped = _remove_comments_comprehensive(unescaped)
         unescaped = re.sub(r",\s*([\]}])", r"\1", unescaped)
@@ -238,7 +234,7 @@ def _remove_comments_comprehensive(text):
     """
     Comprehensively removes both single-line and multi-line JavaScript style comments.
     Handles complex cases like nested comments and comments inside strings.
-    
+
     :param text: The JSON text to clean
     :return: Text with all comments removed
     """
@@ -249,49 +245,66 @@ def _remove_comments_comprehensive(text):
     in_single_comment = False
     in_multi_comment = False
     escape_next = False
-    
+
     while i < len(text):
         char = text[i]
-        next_char = text[i+1] if i+1 < len(text) else ''
-        
+        next_char = text[i + 1] if i + 1 < len(text) else ""
+
         # Handle string literals
-        if char == '"' and not escape_next and not in_single_comment and not in_multi_comment:
+        if (
+            char == '"'
+            and not escape_next
+            and not in_single_comment
+            and not in_multi_comment
+        ):
             in_string = not in_string
             result.append(char)
-        
+
         # Handle escape character within strings
-        elif char == '\\' and in_string and not escape_next:
+        elif char == "\\" and in_string and not escape_next:
             escape_next = True
             result.append(char)
-        
+
         # Handle start of single-line comment
-        elif char == '/' and next_char == '/' and not in_string and not in_single_comment and not in_multi_comment:
+        elif (
+            char == "/"
+            and next_char == "/"
+            and not in_string
+            and not in_single_comment
+            and not in_multi_comment
+        ):
             in_single_comment = True
             i += 1  # Skip the next '/' character
-        
+
         # Handle end of single-line comment
-        elif char == '\n' and in_single_comment:
+        elif char == "\n" and in_single_comment:
             in_single_comment = False
             result.append(char)  # Keep the newline
-        
+
         # Handle start of multi-line comment
-        elif char == '/' and next_char == '*' and not in_string and not in_single_comment and not in_multi_comment:
+        elif (
+            char == "/"
+            and next_char == "*"
+            and not in_string
+            and not in_single_comment
+            and not in_multi_comment
+        ):
             in_multi_comment = True
             i += 1  # Skip the next '*' character
-        
+
         # Handle end of multi-line comment
-        elif char == '*' and next_char == '/' and in_multi_comment:
+        elif char == "*" and next_char == "/" and in_multi_comment:
             in_multi_comment = False
             i += 1  # Skip the next '/' character
-        
+
         # Add character to result if not in a comment
         elif not in_single_comment and not in_multi_comment:
             result.append(char)
-        
+
         # Reset escape flag
         if escape_next:
             escape_next = False
-        
+
         i += 1
-    
-    return ''.join(result)
+
+    return "".join(result)
