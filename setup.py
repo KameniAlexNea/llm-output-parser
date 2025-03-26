@@ -28,4 +28,11 @@ setup(
     ],
     python_requires=">=3.8",
     keywords="llm, json, parsing, extraction, nlp, ai, language models",
+    extras_require={
+        "dev": [
+            "pytest>=7.0.0",
+            "pytest-cov>=4.0.0",
+            "coveralls>=3.3.1",
+        ],
+    },
 )
