@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.abspath('../..'))  # Adjust the path if needed
 project = 'llm-output-parser'
 copyright = '2025, Alex Kameni'
 author = 'Alex Kameni'
-release = 'llm-output-parser-v0.2.0'
+release = 'llm-output-parser-v0.3.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
