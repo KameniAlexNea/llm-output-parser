@@ -3,7 +3,12 @@ import logging
 import re
 
 
-def parse_json(json_str: str, allow_incomplete: bool = False, strict: bool = True, parse_nested_strings: bool = False):
+def parse_json(
+    json_str: str,
+    allow_incomplete: bool = False,
+    strict: bool = True,
+    parse_nested_strings: bool = False,
+):
     """
     Parses a JSON object from a string that may contain extra text.
 
@@ -26,18 +31,18 @@ def parse_json(json_str: str, allow_incomplete: bool = False, strict: bool = Tru
     :rtype: dict or list or None
     """
     _validate_input(json_str)
-    
+
     # Collect all possible JSON candidates
     candidates = _collect_json_candidates(json_str, allow_incomplete)
-    
+
     if candidates:
         # Return the best candidate based on complexity
         result = _select_best_candidate(candidates)
-        
+
         # Parse nested JSON strings if requested
         if parse_nested_strings and result is not None:
             result = _parse_nested_json_strings(result)
-        
+
         return result
     else:
         return _handle_no_candidates(strict)
@@ -101,35 +106,14 @@ def _extract_repaired_json(json_str: str, candidates: list):
 
 
 def _select_best_candidate(candidates):
-    """Select the best JSON candidate based on complexity metrics."""
+    """Select the best JSON candidate based on serialized JSON length."""
 
-    def complexity_key(item):
-        parsed_obj, json_str = item
-        element_count = _count_json_elements(parsed_obj)
-        depth = _json_structure_depth(parsed_obj)
-        has_arrays = _contains_arrays(parsed_obj)
-        str_len = len(json_str)
-        
-        # Strongly prioritize objects over arrays
-        # is_object = isinstance(parsed_obj, dict)
-        # if is_object:
-        #     # Objects get a massive bonus
-        #     object_bonus = 10000
-        #     # Extra bonus for objects with multiple keys (more meaningful)
-        #     if len(parsed_obj) > 1:
-        #         object_bonus += 5000
-        # else:
-        #     object_bonus = 0
-        object_bonus = 0
-        
-        return (
-            object_bonus + element_count * 10,
-            has_arrays,
-            depth,
-            str_len,
-        )
+    def length_key(item):
+        parsed_obj, _ = item
+        # Simple and clear: just compare the length of the serialized JSON
+        return len(json.dumps(parsed_obj))
 
-    sorted_candidates = sorted(candidates, key=complexity_key, reverse=True)
+    sorted_candidates = sorted(candidates, key=length_key, reverse=True)
     return sorted_candidates[0][0]
 
 
@@ -524,47 +508,10 @@ def _extract_and_repair_partial_json(text: str, candidates: list):
                 _repair_incomplete_structure(partial, open_char, close_char, candidates)
 
 
-def _count_json_elements(obj):
-    """
-    Count the total number of elements in a JSON structure.
-
-    :param obj: The JSON object (dict or list)
-    :return: Total count of elements
-    """
-    if isinstance(obj, dict):
-        count = len(obj)
-        for value in obj.values():
-            count += _count_json_elements(value)
-        return count
-    elif isinstance(obj, list):
-        count = len(obj)
-        for item in obj:
-            count += _count_json_elements(item)
-        return count
-    else:
-        return 1
-
-
-def _contains_arrays(obj):
-    """
-    Check if a JSON structure contains arrays, which often indicates more complete data.
-
-    :param obj: The JSON object (dict or list)
-    :return: Boolean indicating if arrays are present
-    """
-    if isinstance(obj, list):
-        return True
-    elif isinstance(obj, dict):
-        for value in obj.values():
-            if _contains_arrays(value):
-                return True
-    return False
-
-
 def _parse_nested_json_strings(obj):
     """
     Recursively parse string values that look like JSON into their actual JSON types.
-    
+
     :param obj: The JSON object to process
     :return: The processed object with nested JSON strings parsed
     """
@@ -598,22 +545,22 @@ def _parse_nested_json_strings(obj):
 def _try_parse_json_string_value(value: str):
     """
     Try to parse a string value as JSON if it looks like JSON.
-    
+
     :param value: The string value to potentially parse
     :return: Parsed JSON object/array if successful, None otherwise
     """
     # Skip obviously non-JSON strings
     if not value or len(value) < 2:
         return None
-    
+
     # Only try to parse strings that look like JSON
     stripped = value.strip()
     if not (
-        (stripped.startswith('{') and stripped.endswith('}')) or
-        (stripped.startswith('[') and stripped.endswith(']'))
+        (stripped.startswith("{") and stripped.endswith("}"))
+        or (stripped.startswith("[") and stripped.endswith("]"))
     ):
         return None
-    
+
     try:
         parsed = json.loads(stripped)
         # Only return the parsed result if it's a dict or list
@@ -621,5 +568,5 @@ def _try_parse_json_string_value(value: str):
             return parsed
     except (json.JSONDecodeError, ValueError):
         pass
-    
+
     return None
