@@ -3,7 +3,7 @@ import logging
 import re
 
 
-def parse_json(json_str: str, allow_incomplete: bool = False, strict: bool = True):
+def parse_json(json_str: str, allow_incomplete: bool = False, strict: bool = True, parse_nested_strings: bool = False):
     """
     Parses a JSON object from a string that may contain extra text.
 
@@ -20,17 +20,25 @@ def parse_json(json_str: str, allow_incomplete: bool = False, strict: bool = Tru
     :type allow_incomplete: bool
     :param strict: Whether to raise errors on failures (when False, returns None on failure).
     :type strict: bool
+    :param parse_nested_strings: Whether to parse string values that look like JSON.
+    :type parse_nested_strings: bool
     :return: The parsed JSON object if successfully extracted, otherwise None.
     :rtype: dict or list or None
     """
     _validate_input(json_str)
-
+    
     # Collect all possible JSON candidates
     candidates = _collect_json_candidates(json_str, allow_incomplete)
-
+    
     if candidates:
         # Return the best candidate based on complexity
-        return _select_best_candidate(candidates)
+        result = _select_best_candidate(candidates)
+        
+        # Parse nested JSON strings if requested
+        if parse_nested_strings and result is not None:
+            result = _parse_nested_json_strings(result)
+        
+        return result
     else:
         return _handle_no_candidates(strict)
 
@@ -97,11 +105,28 @@ def _select_best_candidate(candidates):
 
     def complexity_key(item):
         parsed_obj, json_str = item
+        element_count = _count_json_elements(parsed_obj)
+        depth = _json_structure_depth(parsed_obj)
+        has_arrays = _contains_arrays(parsed_obj)
+        str_len = len(json_str)
+        
+        # Strongly prioritize objects over arrays
+        # is_object = isinstance(parsed_obj, dict)
+        # if is_object:
+        #     # Objects get a massive bonus
+        #     object_bonus = 10000
+        #     # Extra bonus for objects with multiple keys (more meaningful)
+        #     if len(parsed_obj) > 1:
+        #         object_bonus += 5000
+        # else:
+        #     object_bonus = 0
+        object_bonus = 0
+        
         return (
-            _count_json_elements(parsed_obj) * 10,
-            _contains_arrays(parsed_obj),
-            _json_structure_depth(parsed_obj),
-            len(json_str),
+            object_bonus + element_count * 10,
+            has_arrays,
+            depth,
+            str_len,
         )
 
     sorted_candidates = sorted(candidates, key=complexity_key, reverse=True)
@@ -534,3 +559,67 @@ def _contains_arrays(obj):
             if _contains_arrays(value):
                 return True
     return False
+
+
+def _parse_nested_json_strings(obj):
+    """
+    Recursively parse string values that look like JSON into their actual JSON types.
+    
+    :param obj: The JSON object to process
+    :return: The processed object with nested JSON strings parsed
+    """
+    if isinstance(obj, dict):
+        result = {}
+        for key, value in obj.items():
+            if isinstance(value, str):
+                # Try to parse the string as JSON
+                parsed_value = _try_parse_json_string_value(value)
+                result[key] = parsed_value if parsed_value is not None else value
+            else:
+                # Recursively process nested structures
+                result[key] = _parse_nested_json_strings(value)
+        return result
+    elif isinstance(obj, list):
+        result = []
+        for item in obj:
+            if isinstance(item, str):
+                # Try to parse the string as JSON
+                parsed_item = _try_parse_json_string_value(item)
+                result.append(parsed_item if parsed_item is not None else item)
+            else:
+                # Recursively process nested structures
+                result.append(_parse_nested_json_strings(item))
+        return result
+    else:
+        # Return primitive values unchanged
+        return obj
+
+
+def _try_parse_json_string_value(value: str):
+    """
+    Try to parse a string value as JSON if it looks like JSON.
+    
+    :param value: The string value to potentially parse
+    :return: Parsed JSON object/array if successful, None otherwise
+    """
+    # Skip obviously non-JSON strings
+    if not value or len(value) < 2:
+        return None
+    
+    # Only try to parse strings that look like JSON
+    stripped = value.strip()
+    if not (
+        (stripped.startswith('{') and stripped.endswith('}')) or
+        (stripped.startswith('[') and stripped.endswith(']'))
+    ):
+        return None
+    
+    try:
+        parsed = json.loads(stripped)
+        # Only return the parsed result if it's a dict or list
+        if isinstance(parsed, (dict, list)):
+            return parsed
+    except (json.JSONDecodeError, ValueError):
+        pass
+    
+    return None
