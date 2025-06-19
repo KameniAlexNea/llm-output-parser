@@ -1,6 +1,6 @@
 import json
-import re
 import logging
+import re
 
 
 def parse_json(json_str: str, allow_incomplete: bool = False, strict: bool = True):
@@ -23,65 +23,206 @@ def parse_json(json_str: str, allow_incomplete: bool = False, strict: bool = Tru
     :return: The parsed JSON object if successfully extracted, otherwise None.
     :rtype: dict or list or None
     """
+    _validate_input(json_str)
+
+    # Collect all possible JSON candidates
+    candidates = _collect_json_candidates(json_str, allow_incomplete)
+
+    if candidates:
+        # Return the best candidate based on complexity
+        return _select_best_candidate(candidates)
+    else:
+        return _handle_no_candidates(strict)
+
+
+def _validate_input(json_str):
+    """Validate the input parameters."""
     if json_str is None or not isinstance(json_str, str):
         raise TypeError("Input must be a non-empty string.")
     if not json_str:
         raise ValueError("Input string is empty.")
 
-    # Store all successfully parsed JSON objects
-    parsed_jsons = []
 
-    # Attempt 1: Try to load the entire string as JSON.
+def _collect_json_candidates(json_str: str, allow_incomplete: bool):
+    """Collect all possible JSON candidates from various extraction methods."""
+    candidates = []
+
+    # Direct parsing
+    _try_direct_parse(json_str, candidates)
+
+    # Code block extraction
+    _extract_from_code_blocks(json_str, candidates)
+
+    # Balanced delimiter extraction
+    _extract_with_balanced_delimiters(json_str, candidates)
+
+    # Incomplete JSON repair (if enabled)
+    if allow_incomplete:
+        _extract_repaired_json(json_str, candidates)
+
+    return candidates
+
+
+def _try_direct_parse(json_str: str, candidates: list):
+    """Attempt to parse the entire string as JSON."""
     try:
         parsed = json.loads(json_str)
-        parsed_jsons.append((parsed, json_str))
+        candidates.append((parsed, json_str))
     except json.JSONDecodeError:
         pass
 
-    # Attempt 2: Look for JSON blocks delimited by ```json and ```.
-    # Find all code blocks and try to parse each one
-    code_block_matches = re.finditer(r"```(?:json)?\s*([\s\S]*?)\s*```", json_str)
-    for match in code_block_matches:
+
+def _extract_from_code_blocks(json_str: str, candidates: list):
+    """Extract JSON from code blocks delimited by triple backticks."""
+    code_block_pattern = r"```(?:json)?\s*([\s\S]*?)\s*```"
+    for match in re.finditer(code_block_pattern, json_str):
         json_block = match.group(1)
-        try:
-            parsed = json.loads(json_block)
-            parsed_jsons.append((parsed, json_block))
-        except json.JSONDecodeError:
-            pass
+        _try_parse_json_string(json_block, candidates)
 
-    # Attempt 3: Extract JSON objects with balanced delimiters
-    _extract_json_objects(json_str, "{", "}", parsed_jsons)
 
-    # Attempt 4: Extract JSON arrays with balanced delimiters
-    _extract_json_objects(json_str, "[", "]", parsed_jsons)
+def _extract_with_balanced_delimiters(json_str: str, candidates: list):
+    """Extract JSON using balanced delimiter matching."""
+    _extract_json_objects(json_str, "{", "}", candidates)
+    _extract_json_objects(json_str, "[", "]", candidates)
 
-    # Attempt 5: If allow_incomplete is True, try to repair incomplete JSON
-    if allow_incomplete:
-        repaired_jsons = _attempt_json_repair(json_str)
-        parsed_jsons.extend(repaired_jsons)
 
-    if parsed_jsons:
-        # Sort by complexity with improved criteria
-        def sort_key(item):
-            parsed_obj, json_str = item
-            # Calculate various metrics for sorting
-            str_len = len(json_str)
-            depth = _json_structure_depth(parsed_obj)
-            element_count = _count_json_elements(parsed_obj)
-            
-            # Prioritize objects that contain arrays (likely more complete data)
-            has_arrays = _contains_arrays(parsed_obj)
-            
-            # Prioritize larger structures, but weight element count heavily
-            return (element_count * 10, has_arrays, depth, str_len)
-        
-        sorted_jsons = sorted(parsed_jsons, key=sort_key, reverse=True)
-        return sorted_jsons[0][0]
+def _extract_repaired_json(json_str: str, candidates: list):
+    """Extract and repair incomplete JSON."""
+    repaired_candidates = _attempt_json_repair(json_str)
+    candidates.extend(repaired_candidates)
+
+
+def _select_best_candidate(candidates):
+    """Select the best JSON candidate based on complexity metrics."""
+
+    def complexity_key(item):
+        parsed_obj, json_str = item
+        return (
+            _count_json_elements(parsed_obj) * 10,
+            _contains_arrays(parsed_obj),
+            _json_structure_depth(parsed_obj),
+            len(json_str),
+        )
+
+    sorted_candidates = sorted(candidates, key=complexity_key, reverse=True)
+    return sorted_candidates[0][0]
+
+
+def _handle_no_candidates(strict: bool):
+    """Handle the case when no JSON candidates are found."""
+    if strict:
+        raise ValueError("Failed to parse JSON from the input string.")
     else:
-        if strict:
-            raise ValueError("Failed to parse JSON from the input string.")
-        else:
-            return None
+        return None
+
+
+def _try_parse_json_string(json_str: str, candidates: list):
+    """Try to parse a JSON string with various cleaning approaches."""
+    # Try direct parsing first
+    if _try_parse_and_add(json_str, candidates):
+        return
+
+    # Try with basic cleaning
+    if _try_parse_with_basic_cleaning(json_str, candidates):
+        return
+
+    # Try with comprehensive cleaning
+    if _try_parse_with_comprehensive_cleaning(json_str, candidates):
+        return
+
+    # Try with control character handling
+    _try_parse_with_control_char_handling(json_str, candidates)
+
+
+def _try_parse_and_add(json_str: str, candidates: list) -> bool:
+    """Try to parse JSON string directly and add to candidates if successful."""
+    try:
+        parsed = json.loads(json_str)
+        if isinstance(parsed, (dict, list)):
+            candidates.append((parsed, json_str))
+            return True
+    except json.JSONDecodeError:
+        pass
+    return False
+
+
+def _try_parse_with_basic_cleaning(json_str: str, candidates: list) -> bool:
+    """Try parsing with basic comment removal and comma cleanup."""
+    try:
+        # Remove comments and trailing commas
+        cleaned = _remove_basic_comments(json_str)
+        cleaned = _remove_trailing_commas(cleaned)
+
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, (dict, list)):
+            candidates.append((parsed, cleaned))
+            return True
+    except json.JSONDecodeError:
+        pass
+    return False
+
+
+def _try_parse_with_comprehensive_cleaning(json_str: str, candidates: list) -> bool:
+    """Try parsing with comprehensive comment removal."""
+    try:
+        cleaned = _remove_comments_comprehensive(json_str)
+        cleaned = _remove_trailing_commas(cleaned)
+
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, (dict, list)):
+            candidates.append((parsed, cleaned))
+            return True
+    except json.JSONDecodeError:
+        pass
+    return False
+
+
+def _try_parse_with_control_char_handling(json_str: str, candidates: list):
+    """Try parsing with control character escaping."""
+    try:
+        escaped = _escape_control_characters(json_str)
+        escaped = _remove_comments_comprehensive(escaped)
+        escaped = _remove_trailing_commas(escaped)
+
+        parsed = json.loads(escaped)
+        if isinstance(parsed, (dict, list)):
+            candidates.append((parsed, escaped))
+    except (json.JSONDecodeError, Exception):
+        pass
+
+
+def _remove_basic_comments(text: str) -> str:
+    """Remove basic JavaScript-style comments."""
+    # Remove multi-line comments
+    text = re.sub(r"/\*[\s\S]*?\*/", "", text, flags=re.DOTALL)
+    # Remove single-line comments
+    text = re.sub(r"//.*?(?:\n|$)", "", text, flags=re.MULTILINE)
+    return text
+
+
+def _remove_trailing_commas(text: str) -> str:
+    """Remove trailing commas before closing brackets/braces."""
+    return re.sub(r",\s*([\]}])", r"\1", text)
+
+
+def _escape_control_characters(json_str: str) -> str:
+    """Escape control characters in JSON string."""
+    control_char_map = {"\b": "\\b", "\f": "\\f", "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+
+    # Avoid double escaping
+    result = json_str
+    for char, escape in control_char_map.items():
+        placeholder = f"__PLACEHOLDER_{ord(char)}__"
+        result = result.replace(escape, placeholder)
+
+    for char, escape in control_char_map.items():
+        result = result.replace(char, escape)
+
+    for char, escape in control_char_map.items():
+        placeholder = f"__PLACEHOLDER_{ord(char)}__"
+        result = result.replace(placeholder, escape)
+
+    return result
 
 
 def _json_structure_depth(obj):
@@ -106,151 +247,49 @@ def _json_structure_depth(obj):
 def _extract_json_objects(
     text: str, open_delimiter: str, close_delimiter: str, results: list
 ):
-    """
-    Extracts all valid JSON objects or arrays from the text with properly balanced delimiters.
-
-    :param text: The text to search in
-    :param open_delimiter: Opening delimiter ('{' or '[')
-    :param close_delimiter: Closing delimiter ('}' or ']')
-    :param results: List to append results to (tuple of (parsed_json, json_string))
-    """
+    """Extract JSON objects/arrays with balanced delimiters."""
     i = 0
     while i < len(text):
-        # Find the next opening delimiter
         start = text.find(open_delimiter, i)
         if start == -1:
             break
 
-        # Track balanced delimiters
-        balance = 1
-        pos = start + 1
-        in_string = False
-        escape_char = False
+        end_pos = _find_balanced_delimiter_end(
+            text, start, open_delimiter, close_delimiter
+        )
 
-        # Scan for the matching closing delimiter
-        while pos < len(text) and balance > 0:
-            char = text[pos]
-
-            # Handle string literals (ignore delimiters inside strings)
-            if char == '"' and not escape_char:
-                in_string = not in_string
-            elif not in_string:
-                if char == open_delimiter:
-                    balance += 1
-                elif char == close_delimiter:
-                    balance -= 1
-
-            # Track escape characters
-            if char == "\\" and not escape_char:
-                escape_char = True
-            else:
-                escape_char = False
-
-            pos += 1
-
-        # If we found a balanced object
-        if balance == 0:
-            # Extract the object string including delimiters
-            json_str = text[start:pos]
-
-            # Try multiple parsing approaches
-            _try_parse_with_approaches(json_str, results)
-
-        # Move to position after the current match to look for more
-        i = pos if balance == 0 else start + 1
+        if end_pos is not None:
+            json_str = text[start:end_pos]
+            _try_parse_json_string(json_str, results)
+            i = end_pos
+        else:
+            i = start + 1
 
 
-def _try_parse_with_approaches(json_str: str, results: list):
-    """
-    Attempts to parse a JSON string using multiple approaches.
+def _find_balanced_delimiter_end(
+    text: str, start: int, open_delim: str, close_delim: str
+):
+    """Find the end position of a balanced delimiter structure."""
+    balance = 1
+    pos = start + 1
+    in_string = False
+    escape_char = False
 
-    :param json_str: The JSON string to parse
-    :param results: List to append results to
-    """
-    # Approach 1: Direct parsing
-    try:
-        parsed = json.loads(json_str)
-        if isinstance(parsed, (dict, list)):
-            results.append((parsed, json_str))
-        return  # Successfully parsed, no need to try other approaches
-    except json.JSONDecodeError:
-        pass
+    while pos < len(text) and balance > 0:
+        char = text[pos]
 
-    # Approach 2: Clean up common formatting issues
-    try:
-        # Remove JavaScript-style comments (improved for multi-line handling)
-        uncleaned = json_str
+        if char == '"' and not escape_char:
+            in_string = not in_string
+        elif not in_string:
+            if char == open_delim:
+                balance += 1
+            elif char == close_delim:
+                balance -= 1
 
-        # First, handle multi-line comments (/* ... */)
-        # This pattern uses a non-greedy match to properly handle nested structures
-        cleaned = re.sub(r"/\*[\s\S]*?\*/", "", uncleaned, flags=re.DOTALL)
+        escape_char = char == "\\" and not escape_char
+        pos += 1
 
-        # Then handle single-line comments
-        cleaned = re.sub(r"//.*?(?:\n|$)", "", cleaned, flags=re.MULTILINE)
-
-        # Remove trailing commas in objects and arrays
-        cleaned = re.sub(r",\s*([\]}])", r"\1", cleaned)
-
-        parsed = json.loads(cleaned)
-        if isinstance(parsed, (dict, list)):
-            results.append((parsed, cleaned))
-        return  # Successfully parsed after cleaning
-    except json.JSONDecodeError:
-        pass
-
-    # Approach 3: More aggressive cleaning if the above failed
-    try:
-        # Try a more comprehensive cleaning approach
-        # First remove all comments completely
-        aggressive_cleaned = _remove_comments_comprehensive(json_str)
-
-        # Then fix trailing commas
-        aggressive_cleaned = re.sub(r",\s*([\]}])", r"\1", aggressive_cleaned)
-
-        parsed = json.loads(aggressive_cleaned)
-        if isinstance(parsed, (dict, list)):
-            results.append((parsed, aggressive_cleaned))
-        return  # Successfully parsed after aggressive cleaning
-    except json.JSONDecodeError:
-        pass
-
-    # Approach 4: Manual handling of control characters
-    try:
-        # Replace literal control characters with their proper JSON escape sequences
-        control_char_map = {
-            "\b": "\\b",  # backspace
-            "\f": "\\f",  # form feed
-            "\n": "\\n",  # line feed
-            "\r": "\\r",  # carriage return
-            "\t": "\\t",  # tab
-        }
-
-        # First, unescape any already escaped sequences to avoid double escaping
-        unescaped = json_str
-        for char, escape in control_char_map.items():
-            # Replace the escaped version with a placeholder
-            placeholder = f"__PLACEHOLDER_{ord(char)}__"
-            unescaped = unescaped.replace(escape, placeholder)
-
-        # Then replace actual control characters with proper escapes
-        for char, escape in control_char_map.items():
-            unescaped = unescaped.replace(char, escape)
-
-        # Restore placeholders to their proper escaped form
-        for char, escape in control_char_map.items():
-            placeholder = f"__PLACEHOLDER_{ord(char)}__"
-            unescaped = unescaped.replace(placeholder, escape)
-
-        # Apply all cleanings together as a last resort
-        unescaped = _remove_comments_comprehensive(unescaped)
-        unescaped = re.sub(r",\s*([\]}])", r"\1", unescaped)
-
-        parsed = json.loads(unescaped)
-        if isinstance(parsed, (dict, list)):
-            results.append((parsed, unescaped))
-    except (json.JSONDecodeError, Exception):
-        # If all approaches fail, don't add anything to results
-        pass
+    return pos if balance == 0 else None
 
 
 def _remove_comments_comprehensive(text):
@@ -261,7 +300,6 @@ def _remove_comments_comprehensive(text):
     :param text: The JSON text to clean
     :return: Text with all comments removed
     """
-    # Process the string character by character to properly handle comments vs strings
     result = []
     i = 0
     in_string = False
@@ -273,7 +311,6 @@ def _remove_comments_comprehensive(text):
         char = text[i]
         next_char = text[i + 1] if i + 1 < len(text) else ""
 
-        # Handle string literals
         if (
             char == '"'
             and not escape_next
@@ -282,13 +319,9 @@ def _remove_comments_comprehensive(text):
         ):
             in_string = not in_string
             result.append(char)
-
-        # Handle escape character within strings
         elif char == "\\" and in_string and not escape_next:
             escape_next = True
             result.append(char)
-
-        # Handle start of single-line comment
         elif (
             char == "/"
             and next_char == "/"
@@ -298,13 +331,9 @@ def _remove_comments_comprehensive(text):
         ):
             in_single_comment = True
             i += 1  # Skip the next '/' character
-
-        # Handle end of single-line comment
         elif char == "\n" and in_single_comment:
             in_single_comment = False
             result.append(char)  # Keep the newline
-
-        # Handle start of multi-line comment
         elif (
             char == "/"
             and next_char == "*"
@@ -314,174 +343,98 @@ def _remove_comments_comprehensive(text):
         ):
             in_multi_comment = True
             i += 1  # Skip the next '*' character
-
-        # Handle end of multi-line comment
         elif char == "*" and next_char == "/" and in_multi_comment:
             in_multi_comment = False
             i += 1  # Skip the next '/' character
-
-        # Add character to result if not in a comment
         elif not in_single_comment and not in_multi_comment:
             result.append(char)
 
-        # Reset escape flag
         if escape_next:
             escape_next = False
-
         i += 1
 
     return "".join(result)
 
 
 def _attempt_json_repair(json_str: str):
-    """
-    Attempts to repair incomplete or truncated JSON strings.
+    """Attempt to repair incomplete or truncated JSON strings."""
+    candidates = []
 
-    :param json_str: The potentially incomplete JSON string
-    :return: List of tuples (parsed_json, repaired_string)
-    """
-    repaired_jsons = []
-
-    # Try repairing incomplete objects and arrays in code blocks first
-    code_block_matches = re.finditer(r"```(?:json)?\s*([\s\S]*?)\s*```", json_str)
-    for match in code_block_matches:
-        json_block = match.group(1)
-        repaired = _repair_incomplete_json(json_block)
-        if repaired:
-            repaired_jsons.extend(repaired)
+    # Try repairing code blocks
+    _repair_code_blocks(json_str, candidates)
 
     # Try repairing the entire string
-    repaired = _repair_incomplete_json(json_str)
-    if repaired:
-        repaired_jsons.extend(repaired)
+    _repair_json_string(json_str, candidates)
 
-    return repaired_jsons
+    return candidates
 
 
-def _repair_incomplete_json(json_str: str):
-    """
-    Attempts various repair strategies for incomplete JSON.
+def _repair_code_blocks(json_str: str, candidates: list):
+    """Extract and repair JSON from code blocks."""
+    code_block_pattern = r"```(?:json)?\s*([\s\S]*?)\s*```"
+    for match in re.finditer(code_block_pattern, json_str):
+        json_block = match.group(1)
+        _repair_json_string(json_block, candidates)
 
-    :param json_str: The JSON string to repair
-    :return: List of tuples (parsed_json, repaired_string)
-    """
-    results = []
 
-    # Clean the input string
+def _repair_json_string(json_str: str, candidates: list):
+    """Apply various repair strategies to a JSON string."""
     cleaned = json_str.strip()
     if not cleaned:
-        return results
+        return
 
-    # Strategy 1: Try to complete incomplete objects
+    # Try repairing based on the starting character
     if cleaned.startswith("{"):
-        repaired_obj = _repair_incomplete_object(cleaned)
-        if repaired_obj:
-            results.extend(repaired_obj)
+        _repair_incomplete_structure(cleaned, "{", "}", candidates)
+    elif cleaned.startswith("["):
+        _repair_incomplete_structure(cleaned, "[", "]", candidates)
 
-    # Strategy 2: Try to complete incomplete arrays
-    if cleaned.startswith("["):
-        repaired_arr = _repair_incomplete_array(cleaned)
-        if repaired_arr:
-            results.extend(repaired_arr)
-
-    # Strategy 3: Look for partial JSON structures within the text
-    results.extend(_extract_and_repair_partial_json(cleaned))
-
-    return results
+    # Look for partial structures within the text
+    _extract_and_repair_partial_json(cleaned, candidates)
 
 
-def _repair_incomplete_object(json_str: str):
-    """
-    Attempts to repair incomplete JSON objects.
+def _repair_incomplete_structure(
+    json_str: str, open_char: str, close_char: str, candidates: list
+):
+    """Repair incomplete JSON objects or arrays."""
+    # Clean and count delimiters
+    cleaned = _clean_json_for_repair(json_str)
+    open_count = cleaned.count(open_char)
+    close_count = cleaned.count(close_char)
 
-    :param json_str: JSON string starting with '{'
-    :return: List of tuples (parsed_json, repaired_string)
-    """
-    results = []
+    if open_count <= close_count:
+        return  # Already balanced or over-closed
 
-    # Remove comments and clean
+    # Try sophisticated repair first
+    repaired = _complete_unfinished_pairs(cleaned, close_char)
+    if repaired and _try_parse_repaired(repaired, candidates):
+        return
+
+    # Fallback to simple closing
+    simple_repair = cleaned + close_char * (open_count - close_count)
+    _try_parse_repaired(simple_repair, candidates)
+
+
+def _clean_json_for_repair(json_str: str) -> str:
+    """Clean JSON string for repair operations."""
     cleaned = _remove_comments_comprehensive(json_str)
-    cleaned = re.sub(r",\s*([\]}])", r"\1", cleaned)  # Remove trailing commas
-
-    # Count open and close braces to determine if incomplete
-    open_braces = cleaned.count("{")
-    close_braces = cleaned.count("}")
-
-    if open_braces > close_braces:
-        # Try different repair strategies
-
-        # Strategy 1: Complete unfinished key-value pairs
-        repaired = _complete_unfinished_pairs(cleaned, "}")
-        if repaired:
-            try:
-                parsed = json.loads(repaired)
-                if isinstance(parsed, dict):
-                    results.append((parsed, repaired))
-                    logging.info(
-                        f"Successfully repaired incomplete JSON object: {repaired[:100]}..."
-                    )
-            except json.JSONDecodeError:
-                pass
-
-        # Strategy 2: Just close all open braces
-        simple_repair = cleaned + "}" * (open_braces - close_braces)
-        try:
-            parsed = json.loads(simple_repair)
-            if isinstance(parsed, dict):
-                results.append((parsed, simple_repair))
-                logging.info(
-                    f"Successfully repaired JSON by closing braces: {simple_repair[:100]}..."
-                )
-        except json.JSONDecodeError:
-            pass
-
-    return results
+    return _remove_trailing_commas(cleaned)
 
 
-def _repair_incomplete_array(json_str: str):
-    """
-    Attempts to repair incomplete JSON arrays.
-
-    :param json_str: JSON string starting with '['
-    :return: List of tuples (parsed_json, repaired_string)
-    """
-    results = []
-
-    # Remove comments and clean
-    cleaned = _remove_comments_comprehensive(json_str)
-    cleaned = re.sub(r",\s*([\]}])", r"\1", cleaned)  # Remove trailing commas
-
-    # Count open and close brackets
-    open_brackets = cleaned.count("[")
-    close_brackets = cleaned.count("]")
-
-    if open_brackets > close_brackets:
-        # Strategy 1: Complete unfinished elements
-        repaired = _complete_unfinished_pairs(cleaned, "]")
-        if repaired:
-            try:
-                parsed = json.loads(repaired)
-                if isinstance(parsed, list):
-                    results.append((parsed, repaired))
-                    logging.info(
-                        f"Successfully repaired incomplete JSON array: {repaired[:100]}..."
-                    )
-            except json.JSONDecodeError:
-                pass
-
-        # Strategy 2: Just close all open brackets
-        simple_repair = cleaned + "]" * (open_brackets - close_brackets)
-        try:
-            parsed = json.loads(simple_repair)
-            if isinstance(parsed, list):
-                results.append((parsed, simple_repair))
-                logging.info(
-                    f"Successfully repaired JSON by closing brackets: {simple_repair[:100]}..."
-                )
-        except json.JSONDecodeError:
-            pass
-
-    return results
+def _try_parse_repaired(repaired: str, candidates: list) -> bool:
+    """Try to parse repaired JSON and add to candidates if successful."""
+    try:
+        parsed = json.loads(repaired)
+        if isinstance(parsed, (dict, list)):
+            candidates.append((parsed, repaired))
+            struct_type = "object" if isinstance(parsed, dict) else "array"
+            logging.info(
+                f"Successfully repaired incomplete JSON {struct_type}: {repaired[:100]}..."
+            )
+            return True
+    except json.JSONDecodeError:
+        pass
+    return False
 
 
 def _complete_unfinished_pairs(json_str: str, close_char: str):
@@ -495,17 +448,17 @@ def _complete_unfinished_pairs(json_str: str, close_char: str):
     # Look for common incomplete patterns
     patterns_and_replacements = [
         # Incomplete key without value: {"key":
-        (r'("[^"]*")\s*:\s*$', r'\1: null'),
+        (r'("[^"]*")\s*:\s*$', r"\1: null"),
         # Incomplete key without colon: {"key"
-        (r'("[^"]*")\s*$', r'\1: null'),
+        (r'("[^"]*")\s*$', r"\1: null"),
         # Incomplete key without quotes: {"key
         (r'\{\s*"?([^",:}]+)"?\s*$', r'{"key": null'),
         # Trailing comma: {"key": "value",
-        (r',\s*$', ''),
+        (r",\s*$", ""),
         # Incomplete nested object: {"key": {
-        (r':\s*\{\s*$', ': {}'),
+        (r":\s*\{\s*$", ": {}"),
         # Incomplete nested array: {"key": [
-        (r':\s*\[\s*$', ': []'),
+        (r":\s*\[\s*$", ": []"),
         # Incomplete string value: {"key": "value
         (r':\s*"([^"]*)\s*$', r': "\1"'),
     ]
@@ -531,39 +484,25 @@ def _complete_unfinished_pairs(json_str: str, close_char: str):
     return repaired if repaired != json_str else None
 
 
-def _extract_and_repair_partial_json(text: str):
-    """
-    Extracts and attempts to repair partial JSON structures from text.
-
-    :param text: Text that may contain partial JSON
-    :return: List of tuples (parsed_json, repaired_string)
-    """
-    results = []
-
+def _extract_and_repair_partial_json(text: str, candidates: list):
+    """Extract and repair partial JSON structures from text."""
     # Look for potential JSON start patterns
-    json_start_patterns = [
-        r"\{[^}]*$",  # Object that doesn't close
-        r"\[[^\]]*$",  # Array that doesn't close
+    patterns = [
+        (r"\{[^}]*$", "{", "}"),  # Object that doesn't close
+        (r"\[[^\]]*$", "[", "]"),  # Array that doesn't close
     ]
 
-    for pattern in json_start_patterns:
-        matches = re.finditer(pattern, text, re.DOTALL)
-        for match in matches:
-            partial = match.group(0)
-            if partial.startswith("{"):
-                repaired = _repair_incomplete_object(partial)
-                results.extend(repaired)
-            elif partial.startswith("["):
-                repaired = _repair_incomplete_array(partial)
-                results.extend(repaired)
-
-    return results
+    for pattern, open_char, close_char in patterns:
+        for match in re.finditer(pattern, text, re.DOTALL):
+            partial = match.group(0).strip()
+            if partial:
+                _repair_incomplete_structure(partial, open_char, close_char, candidates)
 
 
 def _count_json_elements(obj):
     """
     Count the total number of elements in a JSON structure.
-    
+
     :param obj: The JSON object (dict or list)
     :return: Total count of elements
     """
@@ -584,7 +523,7 @@ def _count_json_elements(obj):
 def _contains_arrays(obj):
     """
     Check if a JSON structure contains arrays, which often indicates more complete data.
-    
+
     :param obj: The JSON object (dict or list)
     :return: Boolean indicating if arrays are present
     """
