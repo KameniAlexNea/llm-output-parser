@@ -2,6 +2,42 @@
 requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "llm-output-parser"
+version = "0.3.0"
+description = "Extract and parse JSON from unstructured text outputs from LLMs"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Alex Kameni", email = "Kamenialexnea@gmail.com"}
+]
+keywords = ["llm", "json", "parsing", "extraction", "nlp", "ai", "language models"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: Markup",
+]
+
+[project.urls]
+Homepage = "https://github.com/KameniAlexNea/llm-output-parser"
+Repository = "https://github.com/KameniAlexNea/llm-output-parser"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "coveralls>=3.3.1",
+]
+
 [tool.black]
 line-length = 88
 target-version = ['py38']
